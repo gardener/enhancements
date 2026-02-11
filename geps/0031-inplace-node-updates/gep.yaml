@@ -1,0 +1,18 @@
+title: In-Place Node Updates of Shoot Clusters
+gep-number: 0031
+authors:
+- "@acumino"
+- "@ary1992"
+- "@shafeeqes"
+steering: none
+steering-link: none
+status: implemented
+creation-date: 2024-11-11
+reviewers:
+- "@rfranzke"
+- "@ScheererJ"
+- "@unmarshall"
+- "@vlerenc"
+approvers:
+- "@rfranzke"
+- "@ScheererJ"
