@@ -1,0 +1,14 @@
+title: Observability Stack - Migrating to the prometheus-operator and fluent-bit-operator
+gep-number: 0019
+authors:
+- "@nickytd"
+steering: none
+steering-link: none
+status: implemented
+creation-date: 2022-12-02
+reviewers:
+- "@rfranzke"
+- "@Kristian-ZH"
+approvers:
+- "@rfranzke"
+- "@Kristian-ZH"
