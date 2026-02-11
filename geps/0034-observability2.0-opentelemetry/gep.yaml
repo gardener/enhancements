@@ -1,0 +1,18 @@
+title: Introducing OpenTelemetry Operator and Collectors in Shoot Control Planes
+gep-number: 0034
+authors:
+- "@nickytd"
+- "@rrhubenov"
+steering: technical
+steering-link: https://gardener.cloud/community/steering/technical/2025-03-observability-2.0/
+status: implementable
+creation-date: 2025-04-12
+reviewers:
+- "@Kostov6"
+- "@ScheererJ"
+- "@vpnachev"
+- "@rfranzke"
+approvers:
+- "@Kostov6"
+- "@ScheererJ"
+- "@rfranzke"
