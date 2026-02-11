@@ -1,0 +1,14 @@
+title: Rework API Server Proxy to Drop Proxy Protocol
+gep-number: 0030
+authors:
+- "@robinschneider"
+- "@knht"
+- "@timebertt"
+steering: none
+steering-link: none
+status: implementable
+creation-date: 2024-11-04
+reviewers:
+- "@ScheererJ"
+approvers:
+- "@ScheererJ"
