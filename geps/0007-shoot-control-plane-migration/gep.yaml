@@ -1,0 +1,17 @@
+title: Shoot Control Plane Migration
+gep-number: 0007
+authors:
+- "@plkokanov"
+- "@maybe-another-author"
+steering: none
+steering-link: none
+status: implemented
+creation-date: 2019-10-25
+reviewers:
+- "@rfranzke"
+- "@vlerenc"
+- "@zanetworker"
+- "@swapnilgm"
+approvers:
+- "@rfranzke"
+- "@vpnachev"
