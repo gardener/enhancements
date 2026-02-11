@@ -1,0 +1,14 @@
+title: Self-Hosted Shoot Clusters
+gep-number: 0028
+authors:
+- "@rfranzke"
+- "@ScheererJ"
+- "@vlerenc"
+steering: none
+steering-link: none
+status: implementable
+creation-date: 2024-09-17
+reviewers:
+- "@timebertt"
+approvers:
+- "@timebertt"
