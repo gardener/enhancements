@@ -1,0 +1,16 @@
+title: Migrating from Vali to VictoriaLogs
+gep-number: 0035
+authors:
+- "@nickytd"
+- "@rrhubenov"
+steering: technical
+steering-link: https://gardener.cloud/community/steering/technical/2025-03-observability-2.0/
+status: implementable
+creation-date: 2025-10-13
+reviewers:
+- "@plkokanov"
+- "@ScheererJ"
+- "@vpnachev"
+approvers:
+- "@plkokanov"
+- "@ScheererJ"
