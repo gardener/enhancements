@@ -1,0 +1,16 @@
+title: Shoot Control Plane Migration "Bad Case" Scenario
+gep-number: 0017
+authors:
+- "@stoyanr"
+- "@maybe-another-author"
+steering: none
+steering-link: none
+status: withdrawn
+creation-date: 2021-05-26
+reviewers:
+- "@plkokanov"
+- "@rfranzke"
+- "@vlerenc"
+approvers:
+- "@plkokanov"
+- "@rfranzke"
