@@ -1,0 +1,17 @@
+title: Autoscaling PersistentVolumeClaims
+gep-number: 0038
+authors:
+- "@plkokanov"
+- "@Kostov6"
+steering: technical
+steering-link: https://gardener.cloud/community/steering/technical/2026-02-autoscaling-persistentvolumeclaims/
+status: implementable
+creation-date: 2025-12-16
+reviewers:
+- "@timebertt"
+- "@ScheererJ"
+- "@rfranzke"
+approvers:
+- "@timebertt"
+- "@ScheererJ"
+- "@rfranzke"
