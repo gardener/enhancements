@@ -1,0 +1,15 @@
+title: Improved Usage of the `ShootState` API
+gep-number: 0021
+authors:
+- "@rfranzke"
+steering: none
+steering-link: none
+status: implemented
+creation-date: 2023-06-01
+reviewers:
+- "@timebertt"
+- "@ScheererJ"
+- "@vlerenc"
+approvers:
+- "@timebertt"
+- "@ScheererJ"
