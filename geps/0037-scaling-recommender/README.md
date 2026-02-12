@@ -120,7 +120,7 @@ Currently there are only [two cluster autoscaling implementations](https://kuber
 
 A proof-of-concept [Scaling Advisor](https://github.tools.sap/kubernetes/gardener-scaling-recommender) was envisaged which has single responsibility to provide scaling advice by leveraging the kubernetes kube-scheduler on the current cluster state.
 
-![Scaling Recommender POC Flow](assets/poc-flow.png)
+![Scaling Recommender POC Flow](./poc-flow.png)
 
 
 #### Single actor responsibility
