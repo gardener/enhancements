@@ -18,7 +18,7 @@
 
 ## Motivation
 
-The current solution for image cache is based on [Distribution project](https://github.com/distribution/distribution)'s pull-through cache.
+The current [solution for image cache](https://github.com/gardener/gardener-extension-registry-cache) is based on [Distribution project](https://github.com/distribution/distribution)'s pull-through cache.
 
 ### The Problem
 
@@ -26,7 +26,7 @@ The registry cache extension is not widely adopted in some Gardener landscapes, 
 - **Explicit and non-trivial configuration**: A separate [configuration](https://github.com/gardener/gardener-extension-registry-cache/blob/v0.19.0/docs/usage/registry-cache/configuration.md#shoot-configuration) needs to be set for each upstream registry.
 - **Additional resources**: A StatefulSet is created for each of the configured upstream. The PV size (defaults to 10Gi) should be monitored and [increased](https://github.com/gardener/gardener-extension-registry-cache/blob/v0.19.0/docs/usage/registry-cache/configuration.md#increase-the-cache-disk-size) if necessary, otherwise the cache becomes ineffective.
 - **[Limitations](https://github.com/gardener/gardener-extension-registry-cache/blob/v0.19.0/docs/usage/registry-cache/configuration.md#limitations)**:
-  - It is not possible to cache most of images from the pods in the `kube-system` namespace, as the cache can be used only after its Kubernetes service can be accessed from the host (i.e., after kube-proxy configures iptables/IPVS rules).
+  - It is not possible to cache most of images from the pods in the `kube-system` namespace, as the cache can be used only after its Kubernetes service can be accessed from the host (i.e., after service routing was implemented, e.g. by kube-proxy configuring iptables/IPVS rules).
   - Only one set of [upstream credentials](https://github.com/gardener/gardener-extension-registry-cache/blob/v0.19.0/docs/usage/registry-cache/upstream-credentials.md#how-to-provide-credentials-for-upstream-registry) is supported, therefore some private images cannot be cached.
   - Amazon ECR mirroring is not supported - [ref](https://github.com/gardener/gardener-extension-registry-cache/issues/259).
   - Dynatrace registry mirroring is not effective, as incorrect `Content-Length: 0` header is returned for most of the image layers.
@@ -40,7 +40,7 @@ Due to the low adoption rate and incomplete coverage of upstream registers, ther
 Additionally, there are costs for outbound traffic from image registries like `Amazon Elastic Container Registry`, `Google Cloud Artifact Registry`, and `Azure Container Registry`.
 Even if the pull-through cache is configured, there are also costs for cross zonal traffic within the Shoot cluster.
 
-Providing a p2p image caching solution that is enabled by default and spans all upstream registries will reduce both cloud costs and image pull latency.
+Providing a peer-to-peer (p2p) image caching solution that is enabled by default and spans all upstream registries will reduce both cloud costs and image pull latency.
 
 ### Who Benefits
 
@@ -61,7 +61,7 @@ A brief overview of the components used in this proposal.
 [Spegel][spegel] is a p2p image cache. It runs a local image registry on each node in a Kubernetes cluster. The local registry subscribes for containerd's image related events and serves image blobs and manifests that are available in the containerd image store.
 The content discovery in a Kubernetes cluster is based on [Kademlia DHT][content-provider-routing]. When an image content (blob, manifest or index) is available in the containerd image store, Spegel adds its `digest` to the DHT provider store, announcing that the node provides the content corresponding to the `digest`. Then, when the same `digest` is needed by another node, Spegel searches the DHT for peers that provide the content and pulls it from them.
 
-The straightforward way to deploy Spegel to a Kubernetes cluster is by using the provided helm chart. However, this has some [drawbacks](https://spegel.dev/docs/faq/#what-should-i-do-if-other-pods-are-scheduled-on-new-nodes-before-spegel) when a new node join the cluster. 
+The straightforward way to deploy Spegel to a Kubernetes cluster is by using the provided helm chart. However, this has some [drawbacks](https://spegel.dev/docs/faq/#what-should-i-do-if-other-pods-are-scheduled-on-new-nodes-before-spegel) when a new node joins the cluster.
 Our goal is to be able to use Spegel for all images pulled from the kubelet, including the `registry.k8s.io/pause` image. Therefore it was decided to [run][run-spegel-on-host] Spegel registry as a systemd unit service on the node. This requires contributing a new Spegel `bootstrapper` or extending the existing [HTTP bootstrapper](https://github.com/spegel-org/spegel/blob/6f02215fa3fc1d3bbdb11fa62dfa7c07dbe3b7c2/pkg/routing/bootstrap.go#L131-L135).
 
 #### Kademlia Distributed Hash Table Overview
@@ -206,7 +206,7 @@ $ tree /etc/containerd/certs.d
     └── hosts.toml
 
 $ cat /etc/containerd/certs.d/_default/hosts.toml
-[host."http://localhost:50000"]
+[host."http://localhost:5000"]
   capabilities = ["pull", "resolve"]
 ```
 
