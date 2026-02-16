@@ -1,4 +1,4 @@
-# GEP-0040: Spegel Registry Support in the registry-cache extension
+# GEP-0043: Spegel Registry Support in the registry-cache extension
 
 ## Table of Contents
 
@@ -31,7 +31,7 @@ The registry cache extension is not widely adopted in some Gardener landscapes, 
   - Amazon ECR mirroring is not supported - [ref](https://github.com/gardener/gardener-extension-registry-cache/issues/259).
   - Dynatrace registry mirroring is not effective, as incorrect `Content-Length: 0` header is returned for most of the image layers.
   - It is not possible to mirror private registries authenticated with a kubelet image credential provider - [ref](https://github.com/gardener/gardener-extension-registry-cache/issues/240).
-  - Registry pods scaling is limited to `2` when [HighAvailability](https://github.com/gardener/gardener-extension-registry-cache/blob/8c5ef623b2f8d6b236eb9f2c4c1a8610b72515ce/pkg/apis/registry/v1alpha3/types.go#L103) is enabled. However, when pulling large images from many Nodes simultaneously, 2 registry replicas are not enough and the download speed becomes significantly slower.
+  - Registry pods scaling is challenging and resource consuming.
   - [TTL](https://github.com/gardener/gardener-extension-registry-cache/blob/v0.19.0/docs/usage/registry-cache/configuration.md#garbage-collection) garbage collection setting is inefficient because it is not extended on access. Hence, an image is always deleted from the cache when its TTL expires, and will be re-pulled from upstream if requested again.
 
 ### Why Should We Care
@@ -50,7 +50,7 @@ Providing a p2p image caching solution that is enabled by default and spans all 
 
 ## Proposal
 
-The proposal is to extend the existing [registry-cache](https://github.com/gardener/gardener-extension-registry-cache) extension with a p2p image cache based on Spegel. A new extension type `registry-spegel` will be enabled by default for all Shoot clusters and will be used as the [`_default`][setup-default-mirror-for-all-registries] mirror configuration in `containerd`.
+The proposal is to extend the existing [registry-cache](https://github.com/gardener/gardener-extension-registry-cache) extension with a p2p image cache based on Spegel. A new extension type `registry-spegel` is introduced to configure Spegel registry in the [`_default`][setup-default-mirror-for-all-registries] mirror configuration in `containerd`. Gardener operators should be able to enable the extension globally, i.e. enable for all Shoot in the Gardener landscape.
 
 ### Introduction
 
@@ -107,7 +107,7 @@ type SpegelConfig struct {
 
 ### Architecture Overview 
 
-The `registry-spegel` extension type will be enabled by default for all Shoot clusters in the operator extension resource:
+The `registry-spegel` extension type will support being enabled by default in the operator extension resource:
 ```yaml
 apiVersion: operator.gardener.cloud/v1alpha1
 kind: Extension
@@ -177,7 +177,7 @@ RestartSec=5
 ExecStart=/opt/bin/spegel_metrics.sh
 ```
 
-Certificates used for `mTLS` with the `Bootstrapper` is also provided.
+Certificates used for `mTLS` with the `Bootstrapper` are also provided.
 
 ### Containerd Configuration
 
