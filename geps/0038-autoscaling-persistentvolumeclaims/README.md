@@ -24,6 +24,7 @@
       - [Downscaling (Potential Future Development)](#downscaling-potential-future-development)
     - [Architecture Overview](#architecture-overview)
     - [Gardener Integration](#gardener-integration)
+      - [Integration Into Seed Clusters](#integration-into-seed-clusters)
       - [Support for Shoot Clusters](#support-for-shoot-clusters)
   - [Impact and Alternatives](#impact-and-alternatives)
     - [Risks, Downsides and Trade-offs](#risks-downsides-and-trade-offs)
@@ -245,11 +246,13 @@ The following diagram illustrates the high-level architecture and workflow of th
 
 ### Gardener Integration
 
-The `pvc-autoscaler` is integrated into Gardener as a seed system component, deployed by `gardenlet` as part of the seed reconciliation flow.
-It runs as a Deployment in the seed's `garden` namespace.
-Its primary driving signal is the PVC metrics from the seed's cache Prometheus instance.
+#### Integration into `Seed` Clusters
 
-In this initial iteration, pvc-autoscaler scales two categories of `Vali` and `Prometheus` volumes: those in `Shoot` namespaces, and those in the `Seed`'s garden namespace.
+The `pvc-autoscaler` is integrated into Gardener as a `Seed` system component, deployed by `gardenlet` as part of the `Seed` reconciliation flow.
+It runs as a Deployment in the `Seed`'s `garden` namespace.
+Its primary driving signal is the PVC metrics from the `Seed` cluster's cache Prometheus instance.
+
+In this initial iteration, `pvc-autoscaler` scales two categories of `Vali` and `Prometheus` volumes: those in `Shoot` namespaces, and those in the `Seed`'s garden namespace.
 
 The `Vali` and `Prometheus` component deployers (part of `gardenlet`'s `Shoot` reconciliation flow) create `PersistentVolumeClaimAutoscaler` resources for their respective workloads.
 The `pvc-autoscaler` discovers and scales PVCs for both `Shoot`-level and `Seed`-level observability components.
@@ -267,27 +270,24 @@ spec:
   settings:
     persistentVolumeClaimAutoscaler:
       enabled: true
-      maxAllowed:
-        maxCapacity: 200Gi
-      minAllowed:
-        minStepAbsolute: 4Gi
-        cooldownDuration: 6h
 ```
 
 Whether the `pvc-autoscaler` is deployed in a `Seed` cluster is determined by the `enabled` field.
 Operators can set this field to `true` on a seed-by-seed basis for gradual rollout.
 An API field was chosen instead of a feature gate to cover cases for cloud providers that might not support resizing PVCs.
 
-The `maxAllowed.maxCapacity` field determines the maximum value that shall be used for `spec.volumePolicies[].maxCapacity` when creating `PersistentVolumeClaimAutoscaler`s.
-
-The `minAllowed.minStepAbsolute` field determines the minimum value that shall be used for `spec.volumePolicies[].scaleUp.minStepAbsolute` when creating `PersistentVolumeClaimAutoscaler`s.
-
-The `minAllowed.cooldownDuration` field determines the minimum value that shall be used for `spec.volumePolicies[].scaleUp.cooldownDuration` when creating `PersistentVolumeClaimAutoscaler`s.
-
-When `pvc-autoscaler` is enabled, initial sizes will be reduced from current defaults for newly created volumes.
+When `pvc-autoscaler` is deployed, initial sizes will be reduced from current defaults for newly created volumes.
 The new sizes will be determined by examining the storage usage of observability components across all current `Shoot` and `Seed` clusters.
 This approach enables efficient resource utilization while allowing growth as needed.
-Note that initial sizes will not be lower than what is specified in the `spec.volume.minimumSize` field in the `Seed`.
+
+PVC and PVCA resource might have to be created with differing values depending on the cloud provider.
+For example, on AWS volumes can be resized only once per 6 hours (described in more detail in the [Cloud Provider Limitations](#cloud-provider-limitations) section).
+This requires that PVCs are created with higher initial storage requests and PVCAs are created with higher values for the `spec.volumePolicies[].scaleUp.minStepAbsolute` and `spec.volumePolicies[].scaleUp.cooldownDuration` fields.
+This will be achieved by implementing provider-specific mutating webhooks for PVCs and PVCAs in the provider extensions.
+
+With this we reduce the API surface and keep provider-specific logic out of core Gardener APIs, reduce operational overhead and achieve proper separation of concerns.
+
+Along this way, the `.seed.spec.volumes.minimumSize` field will be deprecated and also moved into a provider-specific webhook.
 
 #### Support for Shoot Clusters
 
