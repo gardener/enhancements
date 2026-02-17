@@ -17,12 +17,11 @@
       - [Automatic PVC Discovery](#automatic-pvc-discovery)
       - [Volume-Specific Policies:](#volume-specific-policies)
       - [Scale-Up Capabilities:](#scale-up-capabilities)
-      - [Capacity Constraints](#capacity-constraints)
       - [Observability and Monitoring](#observability-and-monitoring)
     - [Scaling Algorithm](#scaling-algorithm)
       - [Scale-Up Decision Logic](#scale-up-decision-logic)
       - [Handling Scale-Up Failures](#handling-scale-up-failures)
-      - [Downscaling (Potential Future Development)](#downscaling-potential-future-development)
+      - [Why Downscaling is a Non-Goal](#why-downscaling-is-a-non-goal)
       - [PVC Admission Webhook Considerations](#pvc-admission-webhook-considerations)
     - [Architecture Overview](#architecture-overview)
     - [Gardener Integration](#gardener-integration)
@@ -123,24 +122,15 @@ spec:
     kind: Prometheus
     name: seed
   volumeClaimPolicies:
-  - minCapacity: 2Gi
-    maxCapacity: 5Gi
+  - maxCapacity: 5Gi
     match:
       nameRegex: ".*"
     scaleUp:
       cooldownDuration: 180s
-      stabilizationWindowDuration: 3000s
       thresholdPercent: 80
       stepPercent: 25
       minStepAbsolute: 1Gi
       strategy: InPlace | Off
-    scaleDown: # the scaleDown section is given as an example, due to the complex implementation it will only be added if enough demand for it is present
-      cooldownDuration: 180s
-      stabilizationWindowDuration: 3000s
-      thresholdPercent: 60
-      stepPercent: 25
-      minStepAbsolute: 1Gi
-      strategy: Rsync | OnVolumeDeletion | Off
 status:
   conditions:
   - type: Resizing
@@ -191,7 +181,6 @@ Each `volumePolicy` exposes the following fields:
 - **`stepPercent`**: The percentage increase applied to the current PVC size during a scale-up operation. For example, `25`% means the new size will be at least 25% larger than the current size.
 - **`minStepAbsolute`**: The minimum absolute storage increase that must be applied during a scaling operation, regardless of the `stepPercent` calculation. This ensures meaningful size increases even for smaller volumes. For example, `1Gi` ensures at least 1 gigabyte is added.
 - **`maxCapacity`**: The maximum allowed size for a PVC. Once this limit is reached, no further scaling will occur.
-- **`stabilizationWindowDuration`** can be used to specify the duration for which the current usage must be beyond the `thresholdPercent` before resizing.
 - **`strategy`**: Defines how the autoscaler handles the scaling operation. `InPlace` is the default strategy and resizes the volume by directly modifying the corresponding PVC. `Off` disables scaling.
 
 #### Scale-Up Capabilities:
@@ -201,10 +190,6 @@ Each `volumePolicy` exposes the following fields:
 - Support for percentage-based and absolute minimum step increases.
 - Cooldown periods to prevent rapid successive scaling operations.
 - Automatically evict pods if required to finish the resize operation.
-
-#### Capacity Constraints
-
-`minCapacity` and `maxCapacity` ensure PVCs stay within reasonable bounds, preventing excessive costs or insufficient storage.
 
 #### Observability and Monitoring
 
@@ -233,7 +218,7 @@ The PVC autoscaler employs a **simple threshold-based scaling approach** that ma
 3. If storage or inodes usage exceeds `utilizationThresholdPercent` (e.g., 80%), trigger a scale-up operation
 4. Calculate new size: `max(currentSize * (1 + stepPercent/100), currentSize + minStep)`
 6. Respect cooldown periods to prevent thrashing
-7. Cap at `maxCapacity` for scaling up, and at `minCapacity` for downscaling
+7. Cap at `maxCapacity` for scaling up
 
 #### Handling Scale-Up Failures
 
@@ -251,21 +236,44 @@ See the [Cloud Provider Limitations](#cloud-provider-limitations) section for de
 When a resize fails due to lack of resources on the cloud provider side, the `pvc-autoscaler` can leverage the [Recovery From Volume Expansion Failure][10] feature available in Kubernetes 1.34+.
 This allows the `pvc-autoscaler` to set a smaller value for `.spec.resources.requests.storage` to recover from the failed resize attempt.
 
-#### Downscaling (Potential Future Development)
+#### Why Downscaling is a Non-Goal
 
 Downscaling PVCs is significantly more complex than upscaling because it requires:
 - Safe data migration to smaller volumes.
 - Coordination with application downtime or maintenance windows.
 - Risk mitigation for potential data loss.
-- Downscaling PVCs could result in a size smaller than the one specified in the workload controller that manages the PVC. Depending on the controller, it might try to scale up the PVC back to its original size.
+- Downscaling PVCs could result in a size smaller than the one specified in the workload controller that manages the PVC. Depending on the controller, it might try to scale up the PVC back to its original size. This would require a PVC admission controller that applies the recommended value from the `pvc-autoscaler` to the  `.spec.resources.requests.storage` field of PVCs on updates. This could generate a high load depending on the frequency of updates made by the workload controllers.
+- Downscaling is not supported natively in Kubernetes nor via cloud provider APIs.
 - Data migration via VolumeSnapshot does not work as smaller PVCs cannot be created from VolumeSnapshots that were taken from volumes with a larger storage size.
 This means an external tool (e.g. a pod that runs rsync or some backup-restore functionality similar to [`etcd-backup-restore`][1]) is required to migrate the data.
 
-The initial version of `pvc-autoscaler` will focus on the immediate value of preventing storage exhaustion through automated scale-up.
-For these reasons we will postpone the implementation of downscaling and potentially only do it if the requirements for it outweigh the downsides.
-Additionally, the task of downscaling will be implemented as part of a separate controller or an external tool.
+For these reasons, the initial version of `pvc-autoscaler` will focus on the immediate value of preventing storage exhaustion through automated scale-up.
+We will postpone the implementation of downscaling and potentially only do it if the requirements for it outweigh the downsides.
+
+In the future, the task of downscaling could be implemented as part of a separate controller.
 The `pvc-autoscaler` will only be responsible for triggering downscaling and monitoring the status of the operation.
 One possible approach is to offer a plugin mechanism, allowing stakeholders to write their own downscaling logic which is specific to their application.
+
+A potential future addition to the PVCA API for downscaling could look like this:
+```yaml
+spec:
+  volumePolicies:
+  - minCapacity: 2Gi
+    scaleDown:
+      cooldownDuration: 180s
+      stabilizationWindowDuration: 3000s
+      thresholdPercent: 60
+      stepPercent: 25
+      minStepAbsolute: 1Gi
+      strategy: Rsync | OnVolumeDeletion | Off
+```
+
+- **`minCapacity`**: The minimum allowed size for a PVC. Once this limit is reached, no further downscaling will occur.
+- **`stabilizationWindowDuration`** can be used to specify the duration for which the current usage must be below the `thresholdPercent` before triggering downscaling.
+The rationale behind this is that downscaling is a disruptive operation which should be avoided during short-term data reductions, e.g. after some compression operation.
+- **`Rsync`** strategy indicates that downscaling shall be performed by creating a new smaller volume and using rsync to move data from the current volume to the new one.
+- **`OnVolumeDeletion`** strategy indicates that PVC is resized only if it was deleted and the backing volume also deleted. This would require a webhook to mutate the PVC on creation.
+- **`Off`** disables downscaling.
 
 ### PVC Admission Webhook Considerations
 
