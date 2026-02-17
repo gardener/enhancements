@@ -16,8 +16,8 @@
     - [Example API Design](#example-api-design)
     - [Key Features](#key-features)
       - [Automatic PVC Discovery](#automatic-pvc-discovery)
-      - [Volume-Specific Policies:](#volume-specific-policies)
-      - [Scale-Up Capabilities:](#scale-up-capabilities)
+      - [Volume-Specific Policies](#volume-specific-policies)
+      - [Scale-Up Capabilities](#scale-up-capabilities)
       - [Observability and Monitoring](#observability-and-monitoring)
     - [Scaling Algorithm](#scaling-algorithm)
       - [Scale-Up Decision Logic](#scale-up-decision-logic)
@@ -76,7 +76,7 @@ Gardener currently provisions PersistentVolumeClaims (PVCs) for its observabilit
 - **Under-provisioning risks for growing clusters**: Storage requirements grow organically as clusters scale and generate more metrics and logs. Without autoscaling, clusters risk running out of storage, which can lead to data loss, observability gaps, or service disruptions. To prevent this from happening and bringing down the logging stack, older logs are periodically removed. As a result, in some very large or busy clusters, this strategy allows retention of logs only for 2-3 days.
 - **Over-provisioning for small clusters**: A cluster with minimal workloads has the same storage allocation as a large production cluster, however it might operate with just 5-10% of its observability volumes utilized.
 - **Manual intervention overhead**: Currently, storage adjustments require manual intervention and coordination, creating operational burden and delaying response to storage pressure.
-Additionally, gardener stakeholders and `Shoot` owners provision PVCs for their own workload and run into similar inefficiencies when managing a large number of clusters.
+Additionally, Gardener stakeholders and `Shoot` owners provision PVCs for their own workload and run into similar inefficiencies when managing a large number of clusters.
 
 ### Why this matters
 
@@ -118,7 +118,7 @@ We propose to enhance the existing [`gardener/pvc-autoscaler`][8] project to rec
 
 ### Core Concept
 
-The autoscaler will introduce a `PersistentVolumeClaimAutoscaler` CRD that allows users to define scaling policies for PVCs associated with workload controllers (e.g., StatefulSets, Deployments, CustomResources like Prometheus and others).
+The autoscaler will introduce a `PersistentVolumeClaimAutoscaler` CRD (PVCA for short) that allows users to define scaling policies for PVCs associated with workload controllers (e.g., StatefulSets, Deployments, CustomResources like Prometheus and others).
 The autoscaler will monitor volume usage and automatically adjust PVC sizes based on configurable thresholds and policies.
 
 ### Example API Design
@@ -133,7 +133,7 @@ spec:
     apiVersion: monitoring.coreos.com/v1
     kind: Prometheus
     name: seed
-  volumeClaimPolicies:
+  volumePolicies:
   - maxCapacity: 5Gi
     match:
       nameRegex: ".*"
@@ -180,7 +180,7 @@ The autoscaler will automatically identify PVCs to manage by examining the contr
 - Using the `/scale` subresource to identify pods belonging to the controller, similar to VPA and HPA.
 - Listing all PVCs that are mounted in the identified pods.
 
-#### Volume-Specific Policies:
+#### Volume-Specific Policies
 
 The `volumePolicies` section allows control over specific volumes using regex or selector based matching, enabling different scaling behaviors for different volume types (e.g., data vs. WAL volumes).
 By default, if no regex or selector is specified, the configurations in the `PersistentVolumeClaimAutoscaler` resource apply to all PVCs that are identified by the `pvc-autoscaler`.
@@ -194,13 +194,13 @@ Each `volumePolicy` exposes the following fields:
 - **`maxCapacity`**: The maximum allowed size for a PVC. Once this limit is reached, no further scaling will occur.
 - **`strategy`**: Defines how the autoscaler handles the scaling operation. `InPlace` is the default strategy and resizes the volume by directly modifying the corresponding PVC. `Off` disables scaling.
 
-#### Scale-Up Capabilities:
+#### Scale-Up Capabilities
 
 - Check if the storage class of the identified PVCs support volume expansion.
 - Monitor volume usage and increase PVC size when utilization exceeds configured threshold.
 - Support for percentage-based and absolute minimum step increases.
 - Cooldown periods to prevent rapid successive scaling operations.
-- Automatically evict pods if required to finish the resize operation.
+- Automatically evict pods, if required to finish the resize operation.
 
 #### Observability and Monitoring
 
@@ -226,10 +226,10 @@ The PVC autoscaler employs a **simple threshold-based scaling approach** that ma
    - `kubelet_volume_stats_inodes_free` - Number of free inodes
    - `kubelet_volume_stats_inodes` - Total number of inodes
 2. Calculate current utilization percentage for both space and inodes
-3. If storage or inodes usage exceeds `utilizationThresholdPercent` (e.g., 80%), trigger a scale-up operation
-4. Calculate new size: `max(currentSize * (1 + stepPercent/100), currentSize + minStep)`
-6. Respect cooldown periods to prevent thrashing
-7. Cap at `maxCapacity` for scaling up
+3. If storage or inodes usage exceeds `thresholdPercent` (e.g., 80%), trigger a scale-up operation
+4. Calculate new size: `max(currentSize * (1 + stepPercent/100), currentSize + minStepAbsolute)`
+5. Respect cooldown periods to prevent thrashing
+6. Cap at `maxCapacity` for scaling up
 
 #### Handling Scale-Up Failures
 
@@ -303,11 +303,11 @@ The following diagram illustrates the high-level architecture and workflow of th
 
 ### Gardener Integration
 
-#### Integration into `Seed` Clusters
+#### Integration Into `Seed` Clusters
 
 The `pvc-autoscaler` is integrated into Gardener as a `Seed` system component, deployed by `gardenlet` as part of the `Seed` reconciliation flow.
 It runs as a Deployment in the `Seed`'s `garden` namespace.
-Its primary driving signal is the PVC metrics from the `Seed` cluster's cache Prometheus instance.
+Its primary driving signal is the PVC metrics from the `Seed` cluster's `cache` Prometheus instance.
 
 In this initial iteration, `pvc-autoscaler` scales two categories of `Vali` and `Prometheus` volumes: those in `Shoot` namespaces, and those in the `Seed`'s garden namespace.
 
@@ -337,7 +337,7 @@ When `pvc-autoscaler` is deployed, initial sizes will be reduced from current de
 The new sizes will be determined by examining the storage usage of observability components across all current `Shoot` and `Seed` clusters.
 This approach enables efficient resource utilization while allowing growth as needed.
 
-PVC and PVCA resource might have to be created with differing values depending on the cloud provider.
+PVC and PVCA resources might have to be created with different values depending on the cloud provider.
 For example, on AWS volumes can be resized only once per 6 hours (described in more detail in the [Cloud Provider Limitations](#cloud-provider-limitations) section).
 This requires that PVCs are created with higher initial storage requests and PVCAs are created with higher values for the `spec.volumePolicies[].scaleUp.minStepAbsolute` and `spec.volumePolicies[].scaleUp.cooldownDuration` fields.
 This will be achieved by implementing provider-specific mutating webhooks for PVCs and PVCAs in the provider extensions.
@@ -389,7 +389,7 @@ As a long-term goal of adding autoscaling for `Shoot` clusters after finalizing 
 The metrics used to determine the storage utilization are in ALPHA stage and might change in the future.
 Tests in the Gardener project were already enhanced to ensure that the metrics required by the `pvc-autoscaler` are available in the Kubernetes versions supported by Gardener. For more information see the [Ensure kubelet volume stats metrics availability](https://github.com/gardener/gardener/pull/13855) PR.
 
-Additionally, the prometheus queries used by the `pvc-autoscaler` are configurable via flags, so they can be easily modified by operators if the metrics are changed.
+Additionally, the Prometheus queries used by the `pvc-autoscaler` are configurable via flags, so they can be easily modified by operators if the metrics are changed.
 
 #### Metrics Sources
 
@@ -412,8 +412,8 @@ The following alternatives were also considered:
 
 The pipeline which propagates the volume metrics in Gardener, driving `pvc-autoscaler`, is as follows:
 1. `kubelet` collects PV state data and publishes resource metrics. Default poll interval: 1 minute
-2. The `Seed`'s cache Prometheus polls the metrics provided by `kubelet`. Default poll interval: 1 minute.
-3. `pvc-autoscaler` polls the seed's cache Prometheus instance. Poll interval: 1 minute.
+2. The `Seed`'s `cache` Prometheus polls the metrics provided by `kubelet`. Default poll interval: 1 minute.
+3. `pvc-autoscaler` polls the `Seed`'s `cache` Prometheus instance. Poll interval: 1 minute.
 
 The reaction time, until `pvc-autoscaler` **initiates** a volume resize, can thus exceed 4 minutes.
 The resize operation itself, including the file system resize, can further take a few minutes.
@@ -427,7 +427,7 @@ Different cloud providers impose specific constraints on volume resizing that af
 EBS volumes can only be resized once every 6 hours.
 This means if multiple scaling events are triggered in rapid succession, subsequent resize operations will fail until this period expires.
 Failed resize attempts due to this limit are retried in the next reconciliation cycle.
-PVCA's `cooldownSeconds`, `stepPercent` and `minStep` have to be configured to larger values to accommodate the less frequent scale-ups.
+PVCA's `cooldownDuration`, `stepPercent` and `minStepAbsolute` have to be configured to larger values to accommodate the less frequent scale-ups.
 
 **Azure**:
 Some Azure virtual machine types do not support resizing attached volumes while pods that use them are still running.
@@ -495,7 +495,7 @@ In that case there is nothing that can be done to prevent volume exhaustion.
 Even if the volume is exhausted the worst outcome of it would be:
 
 1. For logging - missing old logs
-2. For metrics - hitting possible issue of Prometheus getting stuck in `CrashLoopbackOff` (currently possible due to bug of invalid wal record leading to volume exhaustion [ref][2])
+2. For metrics - hitting possible issue of Prometheus getting stuck in `CrashLoopBackOff` (currently possible due to bug of invalid wal record leading to volume exhaustion [ref][2])
 
 ### Scaling Algorithm and API Alternatives
 
@@ -508,21 +508,21 @@ VPA's recommendation engine analyzes resource usage over time windows, calculate
 The main benefit of using histograms is that random spikes of CPU won't trigger unnecessary scaling events.
 However, disk space consumption does not have random spikes like CPU or memory. Storage usage follows predictable growth patterns.
 
-Example vali space usage patterns:
+Example Vali space usage patterns:
 ![](logging-storage-graph-1.png)
 ![](logging-storage-graph-2.png)
-Example prometheus space usage patterns:
+Example Prometheus space usage patterns:
 ![](monitoring-storage-graph-1.png)
 ![](monitoring-storage-graph-2.png)
 
-Note that these drops are non-random and caused by periodic compaction or vali's log cleaner when certain threshold is reached
+Note that these drops are non-random and caused by periodic compaction or Vali's log cleaner when a certain threshold is reached.
 
-Because observability components follow a predictable semi-linear pattern there is no need for the VPA-like approach
+Because observability components follow a predictable semi-linear pattern there is no need for the VPA-like approach.
 
 #### Trend based algorithm
 
 A trend based algorithm that calculates the increase of used storage over a given time window and determines how much the PVC has to be scaled up based on that was also considered.
-However, this could behave unexpectedly for workload that has periodic data compaction or deletion.
+However, this could behave unexpectedly for workloads that have periodic data compaction or deletion.
 The time window could be such that it miscalculates the storage increase or even detects a downward trend due to the compaction.
 It also adds additional complexity to the controller which does not seem worthwhile.
 
@@ -588,8 +588,8 @@ We are seeking approval from the Technical Steering Committee to:
 2. Validate the architectural approach including:
    - Threshold-based scaling algorithm (vs. historical/percentile and trend based approaches).
    - Automatic PVC discovery from the provided `targetRef`.
-   - Integration with cache-prometheus in seed clusters.
-   - Integration with garden-prometheus in Gardener runtime clusters.
+   - Integration with `cache` Prometheus in `Seed` clusters.
+   - Integration with `garden` Prometheus in Gardener runtime clusters.
 3. Agree on the phased implementation approach outlined below.
 
 ### Proposed Implementation Timeline
@@ -599,11 +599,11 @@ We are seeking approval from the Technical Steering Committee to:
 - Support for StatefulSets, Prometheus and VLSingle as the primary use case (observability component PVCs).
 - Basic monitoring and status reporting.
 - PVC auto-discovery mechanism from the provided `targetRef`.
-- Collect volume stats metrics from `Prometheus`.
+- Collect volume stats metrics from Prometheus.
 
 #### Phase 2 (Gardener Integration)
-- Deploy in the `garden` namespace of Gardener `Seed` clusters where the autoscaler has easy access to volume metrics from the `cache` `Prometheus` instance.
-- Deploy in the `garden` namespace of Gardener runtime clusters annd use the `garden` Prometheus instance to fetch volume metrics.
+- Deploy in the `garden` namespace of Gardener `Seed` clusters where the autoscaler has easy access to volume metrics from the `cache` Prometheus instance.
+- Deploy in the `garden` namespace of Gardener runtime clusters and use the `garden` Prometheus instance to fetch volume metrics.
 - Focus is on autoscaling observability component PVCs.
 
 #### Phase 3 (Future Enhancement)
@@ -638,7 +638,7 @@ The `volumeClaimTemplates` are immutable and the StatefulSet controller does not
 [KEP 4651][6] makes `volumeClaimTemplates` mutable, however one of the goals of the authors is that if the PVCs were already scaled up, their size will not be touched by the StatefulSet controller.
 
 #### Prometheus
-Prometheus instance create a StatefulSet and the same as above applies.
+Prometheus instances create a StatefulSet and the same as above applies.
 
 #### VLSingle
 According to [GEP 35][7] the `VLSingle` controller will be used to manage a VictoriaLogs instance in the near future.
