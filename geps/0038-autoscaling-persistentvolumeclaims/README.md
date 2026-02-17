@@ -4,6 +4,7 @@
 
 - [GEP-0038: Autoscaling PersistentVolumeClaims](#gep-0038-autoscaling-persistentvolumeclaims)
   - [Table of Contents](#table-of-contents)
+  - [Summary](#summary)
   - [Motivation](#motivation)
     - [Problem Statement](#problem-statement)
     - [Why this matters](#why-this-matters)
@@ -56,6 +57,16 @@
       - [VLSingle](#vlsingle)
     - [Supporting materials (linked or embedded)](#supporting-materials-linked-or-embedded)
 
+## Summary
+
+Gardener currently uses a one-size-fits-all strategy for the volumes of its observability workloads which can be problematic due to both over-provisioning (generating extra costs) and under-provisioning (missing observability signals).
+
+This document proposes a way to resolve this by enhancing the [`gardener/pvc-autoscaler`][8] project to reconcile a new `PersistentVolumeClaimAutoscaler` CustomResourceDefinition which enables declarative autoscaling of `PersistentVolumeClaim`s.
+The proposal details how the [`gardener/pvc-autoscaler`][8] is deployed in Gardener `Seed` and runtime clusters to autoscale volumes of observability components (Prometheus, Vali, VictoriaLogs).
+
+Additionally, the proposal goes over some risks about cloud provider limitations related to volume resizing and risks related to how volume metrics are collected.
+It describes the impact of these risks and presents potential mitigations.
+
 ## Motivation
 
 ### Problem Statement
@@ -85,7 +96,7 @@ A way to resolve these issues is to automatically adapt the size of PVCs to fit 
 - **Stakeholders** can see reduced cloud spending because of right-sized storage allocation that matches actual usage patterns rather than worst-case scenarios.
 
 ### Goals
-- Enhance the [`gardener/pvc-autoscaler`][8] project with a new `PersistentVolumeClaimAutoscaler` API which offers a declarative way to autoscale all `PersistentVolumeClaims` belonging to a workload controller.
+- Enhance the [`gardener/pvc-autoscaler`][8] project with a new `PersistentVolumeClaimAutoscaler` API which offers a declarative way to autoscale all `PersistentVolumeClaim`s belonging to a workload controller.
 - Use a volume utilization threshold based algorithm to determine whether a `PersistentVolumeClaim` should be resized.
 - Enable or disable volume autoscaling and the deployment of the [`gardener/pvc-autoscaler`][8] controller per Gardener runtime and `Seed` clusters via settings in the `Seed` and `Garden` APIs.
 - Deploy `PersistentVolumeClaimAutoscaler` resources to autoscale volumes of observability components in Gardener runtime and `Seed` clusters.
@@ -103,7 +114,7 @@ A way to resolve these issues is to automatically adapt the size of PVCs to fit 
 
 ## Proposal
 
-We propose to enhance the existing [`gardener/pvc-autoscaler`][8] project to reconcile a new Custom Resource Definition (CRD) that enables declarative autoscaling of PersistentVolumeClaims (PVCs).
+We propose to enhance the existing [`gardener/pvc-autoscaler`][8] project to reconcile a new CustomResourceDefinition (CRD) that enables declarative autoscaling of `PersistentVolumeClaim`s (PVCs).
 
 ### Core Concept
 
