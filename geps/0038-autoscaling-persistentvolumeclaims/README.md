@@ -25,6 +25,7 @@
     - [Architecture Overview](#architecture-overview)
     - [Gardener Integration](#gardener-integration)
       - [Integration Into Seed Clusters](#integration-into-seed-clusters)
+      - [Integration Into Gardener Runtime Clusters](#integration-into-gardener-runtime-clusters)
       - [Support for Shoot Clusters](#support-for-shoot-clusters)
   - [Impact and Alternatives](#impact-and-alternatives)
     - [Risks, Downsides and Trade-offs](#risks-downsides-and-trade-offs)
@@ -288,6 +289,29 @@ This will be achieved by implementing provider-specific mutating webhooks for PV
 With this we reduce the API surface and keep provider-specific logic out of core Gardener APIs, reduce operational overhead and achieve proper separation of concerns.
 
 Along this way, the `.seed.spec.volumes.minimumSize` field will be deprecated and also moved into a provider-specific webhook.
+
+#### Integration into Gardener Runtime Clusters
+
+Similarly to `Seed` clusters, the `pvc-autoscaler` is deployed in the Gardener runtime cluster by `gardener-operator` as part of the `Garden` reconciliation flow.
+Its primary driving signal is the PVC metrics from the `garden` Prometheus instance.
+
+The `Garden` API is extended with a new field - `spec.runtimeCluster.settings.persistentVolumeClaimAutoscaler`, which contains settings for the `pvc-autoscaler` deployed in the Gardener runtime cluster.
+
+**Proposed change to `Garden` API:**
+```yaml
+apiVersion: operator.gardener.cloud/v1alpha1
+kind: Garden
+metadata:
+  name: garden
+spec:
+  ...
+  runtimeCluster:
+    settings:
+      persistentVolumeClaimAutoscaler:
+        enabled: true
+```
+
+Similarly to `Seed` clusters, any provider-specific changes to PVCs and PVCAs are handled by corresponding mutating webhooks in the provider extensions.
 
 #### Support for Shoot Clusters
 
