@@ -31,6 +31,7 @@
   - [Impact and Alternatives](#impact-and-alternatives)
     - [Risks, Downsides and Trade-offs](#risks-downsides-and-trade-offs)
       - [Metrics used for volume stats are still ALPHA](#metrics-used-for-volume-stats-are-still-alpha)
+      - [Metrics Sources](#metrics-sources)
       - [Latency](#latency)
       - [Cloud Provider Limitations](#cloud-provider-limitations)
       - [Dependency on `csi-resizer`](#dependency-on-csi-resizer)
@@ -378,6 +379,25 @@ As a long-term goal of adding autoscaling for `Shoot` clusters after finalizing 
 The metrics used to determine the storage utilization are in ALPHA stage and might change in the future.
 Tests in the Gardener project were already enhanced to ensure that the metrics required by the `pvc-autoscaler` are available in the Kubernetes versions supported by Gardener. For more information see the [Ensure kubelet volume stats metrics availability](https://github.com/gardener/gardener/pull/13855) PR.
 
+Additionally, the prometheus queries used by the `pvc-autoscaler` are configurable via flags, so they can be easily modified by operators if the metrics are changed.
+
+#### Metrics Sources
+
+The `pvc-autoscaler` uses Prometheus as its metrics source and queries it for the metrics required by the [Scale-Up Decision Logic](#scale-up-decision-logic).
+Prometheus was chosen because it is already available in Gardener runtime and `Seed` clusters and already scrapes `kubelet`s for volume metrics.
+One downside to this approach is that Prometheus becomes a single point of failure, especially when it does not run in high-availability mode or runs out of free space.
+However, this could be circumvented with proper configuration of the `thresholdPercent`, `minStepAbsolute`, and `stepPercent` fields.
+
+The following alternatives were also considered:
+- **Kubernetes Metrics API (`metrics-server`):**
+  Cannot be used currently because it does not expose PVC disk usage metrics.
+  There is no active work to add PVC disk metrics to `metrics-server` that we are aware of, although there have been previous attempts in that direction (e.g., [KEP 5105][11], which was closed, attempted to add PVC metrics support to `kubectl top` and one of the suggested ways to do that was by enhancing the `metrics-server` to provide the necessary information).
+  There seems to be a clear need for such functionality in the community, and we may file a proposal in this direction in the future, especially because this is required for the long-term goal of autoscaling volumes for `Shoot` clusters
+- **Direct `kubelet` queries:**
+  Volume metrics can be fetched from each `kubelet`'s `/metrics` endpoint, either directly or through the `kube-apiserver` proxy.
+  However, this requires additional logic to discover nodes and proper authentication and authorization, which basically duplicates what Prometheus does.
+  We may still consider this as a fall-back mechanism depending on the availability of Prometheus.
+
 #### Latency
 
 The pipeline which propagates the volume metrics in Gardener, driving `pvc-autoscaler`, is as follows:
@@ -625,6 +645,7 @@ If the PVC's size is scaled down and is smaller than what is specified in the `V
 - [gardener/pvc-autoscaler][8]
 - [gardener/etcd-druid][9]
 - [Recovery From Volume Expansion Failure][10]
+- [KEP 5105][11]
 
 [1]: https://github.com/gardener/etcd-backup-restore
 [2]: https://github.com/prometheus/prometheus/pull/13181
@@ -636,3 +657,4 @@ If the PVC's size is scaled down and is smaller than what is specified in the `V
 [8]: https://github.com/gardener/pvc-autoscaler
 [9]: https://github.com/gardener/etcd-druid
 [10]: https://kubernetes.io/blog/2025/09/19/kubernetes-v1-34-recover-expansion-failure/
+[11]: https://github.com/kubernetes/enhancements/issues/5105
