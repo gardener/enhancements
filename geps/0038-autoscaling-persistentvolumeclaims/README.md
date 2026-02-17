@@ -341,7 +341,7 @@ As a long-term goal of adding autoscaling for `Shoot` clusters after finalizing 
 #### Metrics used for volume stats are still ALPHA
 
 The metrics used to determine the storage utilization are in ALPHA stage and might change in the future.
-Any such changes to the metrics will be caught by tests in the `pvc-autoscaler` repository, when support for a new kubernetes version is added.
+Tests in the Gardener project were already enhanced to ensure that the metrics required by the `pvc-autoscaler` are available in the Kubernetes versions supported by Gardener. For more information see the [Ensure kubelet volume stats metrics availability](https://github.com/gardener/gardener/pull/13855) PR.
 
 #### Latency
 
