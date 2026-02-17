@@ -23,6 +23,7 @@
       - [Scale-Up Decision Logic](#scale-up-decision-logic)
       - [Handling Scale-Up Failures](#handling-scale-up-failures)
       - [Downscaling (Potential Future Development)](#downscaling-potential-future-development)
+      - [PVC Admission Webhook Considerations](#pvc-admission-webhook-considerations)
     - [Architecture Overview](#architecture-overview)
     - [Gardener Integration](#gardener-integration)
       - [Integration Into Seed Clusters](#integration-into-seed-clusters)
@@ -265,6 +266,15 @@ For these reasons we will postpone the implementation of downscaling and potenti
 Additionally, the task of downscaling will be implemented as part of a separate controller or an external tool.
 The `pvc-autoscaler` will only be responsible for triggering downscaling and monitoring the status of the operation.
 One possible approach is to offer a plugin mechanism, allowing stakeholders to write their own downscaling logic which is specific to their application.
+
+### PVC Admission Webhook Considerations
+
+An admission webhook for mutating PVCs on creation is **not required** in the current implementation.
+Current workload controllers (StatefulSets, Prometheus, VLSingle) do not overwrite PVC storage requests that have been increased by the `pvc-autoscaler`.
+
+Additionally, we do not see it as necessary to mutate newly created PVCs when a new replica is created for the workload.
+In such cases its size will be gradually increased by the `pvc-autoscaler` as more data is added to it.
+We assume that the way data is distributed to new replicas is dependent on the workload, e.g. sharding in Prometheus.
 
 ### Architecture Overview
 
