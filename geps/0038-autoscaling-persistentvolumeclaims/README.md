@@ -8,6 +8,8 @@
     - [Problem Statement](#problem-statement)
     - [Why this matters](#why-this-matters)
     - [Who Benefits](#who-benefits)
+    - [Goals](#goals)
+    - [Non-Goals](#non-goals)
   - [Proposal](#proposal)
     - [Core Concept](#core-concept)
     - [Example API Design](#example-api-design)
@@ -22,6 +24,7 @@
       - [Downscaling (Potential Future Development)](#downscaling-potential-future-development)
     - [Architecture Overview](#architecture-overview)
     - [Gardener Integration](#gardener-integration)
+      - [Support for Shoot Clusters](#support-for-shoot-clusters)
   - [Impact and Alternatives](#impact-and-alternatives)
     - [Risks, Downsides and Trade-offs](#risks-downsides-and-trade-offs)
       - [Metrics used for volume stats are still ALPHA](#metrics-used-for-volume-stats-are-still-alpha)
@@ -77,9 +80,26 @@ A way to resolve these issues is to automatically adapt the size of PVCs to fit 
 - **End users** no longer face issues caused by missing observability signals.
 - **Stakeholders** can see reduced cloud spending because of right-sized storage allocation that matches actual usage patterns rather than worst-case scenarios.
 
+### Goals
+- Enhance the [`gardener/pvc-autoscaler`][8] project with a new `PersistentVolumeClaimAutoscaler` API which offers a declarative way to autoscale all `PersistentVolumeClaims` belonging to a workload controller.
+- Use a volume utilization threshold based algorithm to determine whether a `PersistentVolumeClaim` should be resized.
+- Enable or disable volume autoscaling and the deployment of the [`gardener/pvc-autoscaler`][8] controller per Gardener runtime and `Seed` clusters via settings in the `Seed` and `Garden` APIs.
+- Deploy `PersistentVolumeClaimAutoscaler` resources to autoscale volumes of observability components in Gardener runtime and `Seed` clusters.
+- If autoscaling is enabled, provision newly created volumes with smaller initial sizes, as long as such reduction does not contradict Gardener's overall reliability goals.
+- Add mutating webhooks in provider extensions that modify fields in the `PersistentVolumeClaimAutoscaler`, if necessary to adapt them to provider specific requirements.
+- Expose Prometheus metrics to enable monitoring of autoscaling behavior and alerting when capacity limits are reached.
+- Handle provider-specific volume resize failures gracefully, including automated recovery where possible (e.g., restarting workloads when volumes require detachment for resizing).
+
+### Non-Goals
+- Scaling volumes in `Shoot` clusters. Supporting `Shoot`s is a long-term goal contingent on extending volume metrics availability and experience with autoscaling `Seed` and runtime components. See [Support for Shoot Clusters](#support-for-shoot-clusters) for future plans.
+- Automatically scaling down `PersistentVolumeClaim`s.
+- Attempting to resize `PersistentVolumeClaim` on storage classes that don't support expansion.
+- Autoscaling ETCD volumes. The ETCD team plans to orchestrate volume management via [`gardener/etcd-druid`][9].
+- Autoscaling triggered by IOPS (Input/Output Operations Per Second) metrics. For now this can be mitigated by creating the volume with a larger initial size.
+
 ## Proposal
 
-We propose to enhance the existing [`pvc-autoscaler`](https://github.com/gardener/pvc-autoscaler) project to reconcile a new Custom Resource Definition (CRD) that enables declarative autoscaling of PersistentVolumeClaims (PVCs).
+We propose to enhance the existing [`gardener/pvc-autoscaler`][8] project to reconcile a new Custom Resource Definition (CRD) that enables declarative autoscaling of PersistentVolumeClaims (PVCs).
 
 ### Core Concept
 
@@ -268,6 +288,17 @@ When `pvc-autoscaler` is enabled, initial sizes will be reduced from current def
 The new sizes will be determined by examining the storage usage of observability components across all current `Shoot` and `Seed` clusters.
 This approach enables efficient resource utilization while allowing growth as needed.
 Note that initial sizes will not be lower than what is specified in the `spec.volume.minimumSize` field in the `Seed`.
+
+#### Support for Shoot Clusters
+
+Autoscaling volumes for `Shoot` clusters is a non-goal for this proposal because of missing volume metrics in the `Shoot`'s Prometheus instance.
+Not only that, but Prometheus might not be deployed for `Shoot` clusters as operators can opt out of it.
+Additionally, we would like to gain experience with autoscaling volumes in the Gardener runtime and `Seed` clusters before offering this to stakeholders.
+
+As a long-term goal of adding autoscaling for `Shoot` clusters after finalizing it for Gardener runtime and `Seed` clusters, we plan on following up with these steps:
+1. Propose adding PVC volume metrics (disk space and inode usage) to the Kubernetes `metrics-server` API.
+2. Once PVC metrics are available via the standard Metrics API, the autoscaler can be refactored to use the Metrics API instead of Prometheus, removing the dependency on seed-level Prometheus infrastructure.
+3. With metrics available via the Metrics API, the autoscaler can be deployed for `Shoot` clusters and scale PVCs for end-user workloads.
 
 ## Impact and Alternatives
 
@@ -469,6 +500,8 @@ If the PVC's size is scaled down and is smaller than what is specified in the `V
 - [DevOps-Nirvana/Kubernetes-Volume-Autoscaler][5]
 - [KEP 4651][6]
 - [GEP 35][7]
+- [gardener/pvc-autoscaler][8]
+- [gardener/etcd-druid][9]
 
 [1]: https://github.com/gardener/etcd-backup-restore
 [2]: https://github.com/prometheus/prometheus/pull/13181
@@ -477,3 +510,5 @@ If the PVC's size is scaled down and is smaller than what is specified in the `V
 [5]: https://github.com/DevOps-Nirvana/Kubernetes-Volume-Autoscaler
 [6]: https://github.com/kubernetes/enhancements/pull/4651
 [7]: https://github.com/gardener/gardener/pull/13242
+[8]: https://github.com/gardener/pvc-autoscaler
+[9]: https://github.com/gardener/etcd-druid
