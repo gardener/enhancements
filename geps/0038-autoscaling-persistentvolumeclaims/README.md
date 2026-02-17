@@ -21,6 +21,7 @@
       - [Observability and Monitoring](#observability-and-monitoring)
     - [Scaling Algorithm](#scaling-algorithm)
       - [Scale-Up Decision Logic](#scale-up-decision-logic)
+      - [Handling Scale-Up Failures](#handling-scale-up-failures)
       - [Downscaling (Potential Future Development)](#downscaling-potential-future-development)
     - [Architecture Overview](#architecture-overview)
     - [Gardener Integration](#gardener-integration)
@@ -131,7 +132,7 @@ spec:
       thresholdPercent: 80
       stepPercent: 25
       minStepAbsolute: 1Gi
-      strategy: InPlace | EvictPodsIfNecessary | Off
+      strategy: InPlace | Off
     scaleDown: # the scaleDown section is given as an example, due to the complex implementation it will only be added if enough demand for it is present
       cooldownDuration: 180s
       stabilizationWindowDuration: 3000s
@@ -198,7 +199,7 @@ Each `volumePolicy` exposes the following fields:
 - Monitor volume usage and increase PVC size when utilization exceeds configured threshold.
 - Support for percentage-based and absolute minimum step increases.
 - Cooldown periods to prevent rapid successive scaling operations.
-- Configurable pod restart strategies (manual or automatic).
+- Automatically evict pods if required to finish the resize operation.
 
 #### Capacity Constraints
 
@@ -232,6 +233,22 @@ The PVC autoscaler employs a **simple threshold-based scaling approach** that ma
 4. Calculate new size: `max(currentSize * (1 + stepPercent/100), currentSize + minStep)`
 6. Respect cooldown periods to prevent thrashing
 7. Cap at `maxCapacity` for scaling up, and at `minCapacity` for downscaling
+
+#### Handling Scale-Up Failures
+
+Generally scaling up depends on the `csi-resizer`, and the `pvc-autoscaler` does not have any direct influence on the actual resize operation - it can only monitor the status of the PVC and modify its `.spec.resources.requests.storage` fields.
+Due to this, recovering from resize failures can only be done for a few specific cases described below.
+
+**VMs that do not support online volume resizing:**
+Some VMs require the volume to be detached for the resize to complete and the workload to be restarted to reinitialize the file system.
+Whether this case has occurred can be determined by checking the conditions and status of the PVC.
+The `pvc-autoscaler` can attempt recovery from such cases by default by evicting the Pods that use the affected PVCs.
+Note that an admission webhook might be required to deny the creation of a Pod which uses a PVC that is currently being resized.
+See the [Cloud Provider Limitations](#cloud-provider-limitations) section for details on the PVC conditions (specifically for Azure) that can be used to detect such cases.
+
+**Insufficient cloud provider resources:**
+When a resize fails due to lack of resources on the cloud provider side, the `pvc-autoscaler` can leverage the [Recovery From Volume Expansion Failure][10] feature available in Kubernetes 1.34+.
+This allows the `pvc-autoscaler` to set a smaller value for `.spec.resources.requests.storage` to recover from the failed resize attempt.
 
 #### Downscaling (Potential Future Development)
 
@@ -365,10 +382,63 @@ Failed resize attempts due to this limit are retried in the next reconciliation 
 PVCA's `cooldownSeconds`, `stepPercent` and `minStep` have to be configured to larger values to accommodate the less frequent scale-ups.
 
 **Azure**:
-Some Azure virtual machine types do not support resizing attached volumes while pods are running on that VM.
-Volume resize operations may require pod eviction depending on the VM configuration.
-This can cause additional disruption beyond normal PVC resizing operations.
-By using the `strategy` field for scale-up operations, users can specify how their workload should be handled in such cases.
+Some Azure virtual machine types do not support resizing attached volumes while pods that use them are still running.
+When such a volume is resized, the resize fails and the `ControllerResizeError` condition is added to the `.status` of the PVC:
+```yaml
+spec:
+  resources:
+    requests:
+      storage: 20Gi
+status:
+  allocatedResources:
+    storage: 20Gi
+  capacity:
+    storage: 10Gi
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2025-08-07T11:59:54Z"
+    message: |-
+      failed to expand pvc with rpc error: code = Internal desc = failed to resize disk(/subscriptions/<subscription>/resourceGroups/<rg>/providers/Microsoft.Compute/disks/<pv>) with error(PATCH https://management.azure.com/subscriptions/subscription/resourceGroups/<rg>/providers/Microsoft.Compute/disks/<pv>
+      --------------------------------------------------------------------------------
+      RESPONSE 409: 409 Conflict
+      ERROR CODE: OperationNotAllowed
+      --------------------------------------------------------------------------------
+      {
+        "error": {
+          "code": "OperationNotAllowed",
+          "message": "Change in disk property of VM of size 'Standard_D4_v3' is not supported."
+        }
+      }
+      --------------------------------------------------------------------------------
+      )
+    status: "True"
+    type: ControllerResizeError
+```
+
+To complete the resize on the provider side, the volume has to be detached.
+
+Afterwards, when the volume has been resized on the provider side, the `FileSystemResizePending` condition with status `True` is added to the `.status` of the PVC (the `ControllerResizeError` condition is not mentioned below for brevity):
+```yaml
+spec:
+  resources:
+    requests:
+      storage: 20Gi
+status:
+  allocatedResources:
+    storage: 20Gi
+  capacity:
+    storage: 10Gi
+  conditions:
+  - lastProbeTime: null
+    lastTransitionTime: "2025-08-07T12:05:34Z"
+    message: Waiting for user to (re-)start a pod to finish file system resize of
+      volume on node.
+    status: "True"
+    type: FileSystemResizePending
+```
+
+At this point, the `Pod` which uses the PVC can be restarted.
+This reinitializes the file system, the `.status.capacity.storage` field is updated to the new (scaled-up) value, and the resize operation is completed.
 
 #### Dependency on `csi-resizer`
 
@@ -536,6 +606,7 @@ If the PVC's size is scaled down and is smaller than what is specified in the `V
 - [GEP 35][7]
 - [gardener/pvc-autoscaler][8]
 - [gardener/etcd-druid][9]
+- [Recovery From Volume Expansion Failure][10]
 
 [1]: https://github.com/gardener/etcd-backup-restore
 [2]: https://github.com/prometheus/prometheus/pull/13181
@@ -546,3 +617,4 @@ If the PVC's size is scaled down and is smaller than what is specified in the `V
 [7]: https://github.com/gardener/gardener/pull/13242
 [8]: https://github.com/gardener/pvc-autoscaler
 [9]: https://github.com/gardener/etcd-druid
+[10]: https://kubernetes.io/blog/2025/09/19/kubernetes-v1-34-recover-expansion-failure/
