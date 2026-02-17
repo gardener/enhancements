@@ -178,7 +178,6 @@ status:
 
 The autoscaler will automatically identify PVCs to manage by examining the controller specified in `targetRef`. This will be achieved by:
 - Using the `/scale` subresource to identify pods belonging to the controller, similar to VPA and HPA.
-- Optionally traversing the `OwnerReferences` chain of pods to find the top-most controller and validate if it matches the `targetRef`.
 - Listing all PVCs that are mounted in the identified pods.
 
 #### Volume-Specific Policies:
@@ -588,8 +587,9 @@ We are seeking approval from the Technical Steering Committee to:
 1. Approve the proposed API design for the `PersistentVolumeClaimAutoscaler` CRD.
 2. Validate the architectural approach including:
    - Threshold-based scaling algorithm (vs. historical/percentile and trend based approaches).
-   - Automatic PVC discovery via `targetRef` and `OwnerReferences`.
+   - Automatic PVC discovery from the provided `targetRef`.
    - Integration with cache-prometheus in seed clusters.
+   - Integration with garden-prometheus in Gardener runtime clusters.
 3. Agree on the phased implementation approach outlined below.
 
 ### Proposed Implementation Timeline
@@ -598,18 +598,19 @@ We are seeking approval from the Technical Steering Committee to:
 - Implement scale-up functionality.
 - Support for StatefulSets, Prometheus and VLSingle as the primary use case (observability component PVCs).
 - Basic monitoring and status reporting.
-- PVC auto-discovery mechanism via `targetRef` and `OwnerReferences`.
+- PVC auto-discovery mechanism from the provided `targetRef`.
 - Collect volume stats metrics from `Prometheus`.
 
 #### Phase 2 (Gardener Integration)
 - Deploy in the `garden` namespace of Gardener `Seed` clusters where the autoscaler has easy access to volume metrics from the `cache` `Prometheus` instance.
-- Focus is on autoscaling observability component PVCs in the `Seed`.
+- Deploy in the `garden` namespace of Gardener runtime clusters annd use the `garden` Prometheus instance to fetch volume metrics.
+- Focus is on autoscaling observability component PVCs.
 
 #### Phase 3 (Future Enhancement)
+- Propose enhancing the Kubernetes Metrics API (`metrics-server`) to also serve metrics for PVCs.
 - Extend deployment to Shoot clusters (may require different metrics access patterns).
 - If necessary, collect volume stats metrics from other sources.
 - Enable `Shoot` owners to use the autoscaler for their own workloads.
-- Advanced strategies for restarts.
 
 #### Phase 4 (If required by stakeholders)
 - Extend the API with scale-down capabilities (requires complex data migration strategies like rsync-based data migration). Will only be implemented if demand is high enough and outweighs the downsides.
@@ -622,7 +623,7 @@ Upon approval, the team will:
 2. Implement Phase 1 features.
 3. Document configuration and operational guidelines.
 4. Integrate the `pvc-autoscaler` in Gardener (Phase 2).
-5. Continue with Phase 3 of the `pvc-autoscaler` implementation.
+5. Phase 3 and Phase 4 to be tracked as separate proposals.
 
 ## Appendix
 
