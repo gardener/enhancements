@@ -121,10 +121,10 @@ spec:
     kind: Prometheus
     name: seed
   volumeClaimPolicies:
-  - minCapacity: 2Gi # only necessary if support for downscaling is added at a later date
+  - minCapacity: 2Gi
     maxCapacity: 5Gi
-    match: # if this field is omitted, the configured policy is used for all PVCs
-      nameRegex: ".*" # use this policy only for PVCs which have a name that matches the provided regex
+    match:
+      nameRegex: ".*"
     scaleUp:
       cooldownDuration: 180s
       stabilizationWindowDuration: 3000s
@@ -143,14 +143,14 @@ status:
   conditions:
   - type: Resizing
     status: "True"
-    Reason: ResizeInProgress
+    reason: ResizeInProgress
     lastTransitionTime: "2025-08-07T11:59:54Z"
     message: |
       Some PersistentVolumeClaims are being resized:
       - PVC prometheus-seed-1 is being resized due to insufficient inodes.
   - type: RecommendationsAvailable
     status: "True"
-    Reason: RecommendationsProvided
+    reason: RecommendationsProvided
     lastTransitionTime: "2025-08-07T11:59:54Z"
     message: Recommendations have been provided for all PersistentVolumeClaims.
   persistentVolumeClaims:
@@ -181,6 +181,16 @@ The autoscaler will automatically identify PVCs to manage by examining the contr
 
 The `volumePolicies` section allows control over specific volumes using regex or selector based matching, enabling different scaling behaviors for different volume types (e.g., data vs. WAL volumes).
 By default, if no regex or selector is specified, the configurations in the `PersistentVolumeClaimAutoscaler` resource apply to all PVCs that are identified by the `pvc-autoscaler`.
+
+Each `volumePolicy` exposes the following fields:
+- **`match.nameRegex`**: Regex which will be used to match the name of the PVCs for which this `volumePolicy` is used. If this field is omitted, the `volumePolicy` is used for all PVCs managed by this PVCA.
+- **`cooldownDuration`**: Minimum time that must elapse after a scaling operation before another scaling operation can be triggered for the same PVC. This prevents rapid successive scaling operations and allows time for the system to stabilize after a resize. For example, `180s` (3 minutes) ensures at least 3 minutes between resize operations.
+- **`thresholdPercent`**: The utilization percentage (either disk space or inodes) at which a scaling operation is triggered. For scale-up, when usage exceeds this threshold (e.g., `80`%), the autoscaler will initiate a resize operation.
+- **`stepPercent`**: The percentage increase applied to the current PVC size during a scale-up operation. For example, `25`% means the new size will be at least 25% larger than the current size.
+- **`minStepAbsolute`**: The minimum absolute storage increase that must be applied during a scaling operation, regardless of the `stepPercent` calculation. This ensures meaningful size increases even for smaller volumes. For example, `1Gi` ensures at least 1 gigabyte is added.
+- **`maxCapacity`**: The maximum allowed size for a PVC. Once this limit is reached, no further scaling will occur.
+- **`stabilizationWindowDuration`** can be used to specify the duration for which the current usage must be beyond the `thresholdPercent` before resizing.
+- **`strategy`**: Defines how the autoscaler handles the scaling operation. `InPlace` is the default strategy and resizes the volume by directly modifying the corresponding PVC. `Off` disables scaling.
 
 #### Scale-Up Capabilities:
 
