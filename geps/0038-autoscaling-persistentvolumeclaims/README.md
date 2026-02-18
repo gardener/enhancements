@@ -17,7 +17,6 @@
     - [Key Features](#key-features)
       - [Automatic PVC Discovery](#automatic-pvc-discovery)
       - [Volume-Specific Policies](#volume-specific-policies)
-      - [Scale-Up Capabilities](#scale-up-capabilities)
       - [Observability and Monitoring](#observability-and-monitoring)
     - [Scaling Algorithm](#scaling-algorithm)
       - [Scale-Up Decision Logic](#scale-up-decision-logic)
@@ -193,14 +192,6 @@ Each `volumePolicy` exposes the following fields:
 - **`minStepAbsolute`**: The minimum absolute storage increase that must be applied during a scaling operation, regardless of the `stepPercent` calculation. This ensures meaningful size increases even for smaller volumes. For example, `1Gi` ensures at least 1 gigabyte is added.
 - **`maxCapacity`**: The maximum allowed size for a PVC. Once this limit is reached, no further scaling will occur.
 - **`strategy`**: Defines how the autoscaler handles the scaling operation. `InPlace` is the default strategy and resizes the volume by directly modifying the corresponding PVC. `Off` disables scaling.
-
-#### Scale-Up Capabilities
-
-- Check if the storage class of the identified PVCs support volume expansion.
-- Monitor volume usage and increase PVC size when utilization exceeds configured threshold.
-- Support for percentage-based and absolute minimum step increases.
-- Cooldown periods to prevent rapid successive scaling operations.
-- Automatically evict pods, if required to finish the resize operation.
 
 #### Observability and Monitoring
 
