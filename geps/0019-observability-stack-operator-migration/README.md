@@ -500,7 +500,7 @@ Add a [sidecar][grafana-sidecar] to Grafana that will pickup dashboards and prov
 The fluent-bit operator oversees two types for resources:
 
 1. `FluentBit` resource defining the properties of the fluent-bit deamonset.
-1. `ClusterInputs`, `ClusterOutputs`, `ClusterFilters` and `ClusterParsers` defining the fluent-but app configuration.
+1. `ClusterInputs`, `ClusterOutputs`, `ClusterFilters` and `ClusterParsers` defining the fluent-bit app configuration.
 
 1. `FluentBit` custom resource
 
