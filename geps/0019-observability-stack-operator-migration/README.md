@@ -43,7 +43,7 @@ These operators will make it easier for monitoring and logging configurations to
 
 These resources can also be directly referenced in Go and be deployed by their
 respective components, instead of creating `.yaml` files in Go, or templating
-charts. With the addition of the operators it should is easier to provide
+charts. With the addition of the operators it should be easier to provide
 flexible deployment layouts of the components or even introduce new features,
 such as Thanos in the case of prometheus-operator
 
