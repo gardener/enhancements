@@ -10,7 +10,16 @@
     - [Non-Goals](#non-goals)
   - [Proposal](#proposal)
     - [High level Architecture](#high-level-architecture)
-    - [Notes/Constraints/Caveats (Optional)](#notesconstraintscaveats-optional)
+    - [Initial SLOs](#initial-slos)
+      - [kube-apiserver general availability](#kube-apiserver-general-availability)
+      - [kube-apiserver latency](#kube-apiserver-latency)
+      - [kube-apiserver Error rate](#kube-apiserver-error-rate)
+      - [Machine creation latency](#machine-creation-latency)
+      - [Node general availability](#node-general-availability)
+      - [Shoot general availability](#shoot-general-availability)
+      - [Shoot creation latency](#shoot-creation-latency)
+      - [Shoot reconcile latency](#shoot-reconcile-latency)
+    - [Notes/Constraints/Caveats](#notesconstraintscaveats)
       - [Seed inaccessibility](#seed-inaccessibility)
     - [Risks and Mitigations](#risks-and-mitigations)
   - [Design Details](#design-details)
@@ -89,7 +98,198 @@ The extension builds on the existing monitoring infrastructure (Prometheus opera
 
 ![SLO extension high-level architecture](./slo-extension-plan.png)
 
-### Notes/Constraints/Caveats (Optional)
+### Initial SLOs
+
+The following SLOs are proposed as initial defaults, based on industry best practices for Kubernetes clusters and Gardener specifics, but always from the customer perspective. These are meant to be configurable, so they can be adapted to the needs of each Gardener operator. They are also meant to be adjusted on a regular basis based on real world data and experience, especially the thresholds. The goal is to have realistic and achievable SLOs that reflect the customer's experience and satisfaction in operating their shoot clusters.
+
+We decided to focus on 3 main topics for the initial SLOs:
+
+- Kube-apiserver is available, quick (latency) and without error.
+- Machines (nodes) are able to get created in a timely manner (join the cluster) and are running normally
+- Shoots are healthy, are able to get created and can reconcile in a timely manner
+
+> [!NOTE]
+> We are using a time windows of 28 days by default here, but this is going to be configurable based on the needs of each Gardener operator.
+
+> [!NOTE]
+> We are not aiming for perfection for the initial implementation, but rather to have a good starting point that can be improved over time based on real world data and experience. The goal is rather to have realistic and achievable SLOs that reflect the customer's experience and satisfaction in operating their shoot clusters.
+
+### kube-apiserver general availability
+
+- SLI specification: The proportion of requests received with successful response from multiple sources vs the total amount of requests. In order to prevent false positive, a successful request is defined as at least 1 successful requests from any of the sources (inversely, a failing request means that it's failing from all sources are the same time). This is metric is processed at the shoot level.
+- SLI implementation:
+
+  ```promql
+  avg_over_time(
+    max(
+      probe_success{instance="https://api.internal_domain/healthz", type="seed"}
+      OR
+      probe_success{instance="https://kubernetes.default.svc.cluster.local/healthz", type="shoot"}
+      OR 
+      on() vector(0)
+    )[4w:5m]
+  ) * 100
+  ```
+  
+- SLO Threshold: default should be 99.95%, but this would be configurable
+- Notes:
+  - In addition to what's above, we should also add another probe from the shoot to the external endpoint of the kube-apiserver. This way, it should effectively filter out problems from the internet / external to us and focus on problems between the seed's load balancer and the kube-apiserver.
+
+### kube-apiserver latency
+
+- SLI specification: Ratio of requests to the kube-apiserver that take less than 1s to complete (`WATCH`, `LIST`, `CONNECT` and other type of requests like WebSocket are excluded, aka including only "regular" HTTP requests) vs the total amount of requests. This is metric is processed at the shoot level.
+- SLI implementation:
+
+  ```promql
+  (1- shoot:apiserver_latency:percentage) * 100
+  ```
+
+- SLO Threshold: default TBD based on real world data, but this would be configurable
+- Notes:
+  - The `shoot:apiserver_latency:percentage` is a metric created from a Prometheus rule, defined [here](https://github.com/gardener/gardener/blob/71650f56a7bfa555bfc5a09a1b1f97439a4b3d40/pkg/component/kubernetes/apiserver/prometheusrule.go#L181-L184).
+
+### kube-apiserver Error rate
+
+- SLI specification: The proportion of requests ending a successful response vs total amount of requests. This is metric is processed at the shoot level.
+- SLI implementation:
+
+  ```promql
+  (1-(sum(rate(apiserver_request_terminations_total[1h])) or on() vector(0) / sum(rate(apiserver_request_total[1h])))) * 100
+  ```
+
+- SLO Threshold: default TBD based on real world data, but this would be configurable
+Notes:
+  - N/A
+
+### Machine creation latency
+
+- SLI specification: The amount of machine trasitionning from `Pending` to `Running` within 20 minutes vs the total amount of nodes `Pending`in the last 20 minutes. If no nodes were pending in the last 20 minutes, the SLO default oto 100%. This is metric is processed at the shoot level.
+- SLI implementation:
+
+  ```promql
+  (
+    count(
+      (
+        min_over_time(
+          max by (name, namespace) (mcm_machine_current_status_phase)[20m:]
+        ) == 0 // pending
+      )
+      and on (name, namespace)
+      (
+        max by (name, namespace) (mcm_machine_current_status_phase) == 1
+      )
+    )
+  )
+  /
+  clamp_min(
+    count(
+      min_over_time(
+        max by (name, namespace) (mcm_machine_current_status_phase)[20m:]
+      ) == 0 // pending
+    ),
+    1
+  ) or on() vector(1)
+  ```
+
+- SLO Threshold: default TBD based on real world data, but this would be configurable
+- Notes:
+  - We need to implement a histogram metric that doesn't exist at the moment: `mcm_machine_creation_duration_minutes_bucket`
+  - confirm with MCM experts that the `Pending` state only happens during machine creation.
+
+### Node general availability
+
+- SLI specification: The amount of nodes that are ready vs the total amount of nodes, excluding nodes than are less than 10 minutes old (aka actively joining the cluster) and terminating nodes. This is metric is processed at the shoot level.
+
+- SLI implementation:
+
+  ```promql
+  count(
+    mcm_machine_current_status_phase == 1
+    * on(name, namespace) group_left(node_name)
+    mcm_machine_info
+    and on(node_name) (
+      (time() - label_replace(kube_node_created, "node_name", "$1", "node", "(.+)")) > 600
+    )
+  )
+  /
+  count(
+    mcm_machine_current_status_phase
+    * on(name, namespace) group_left(node_name)
+    mcm_machine_info
+    and on(node_name) (
+      (time() - label_replace(kube_node_created, "node_name", "$1", "node", "(.+)")) > 600
+    )
+  )
+  ```
+
+  - `* on(name, namespace) group_left(node_name) mcm_machine_info `- Joins machine status with machine info to get the node_name label
+  - `label_replace(kube_node_created, "node_name", "$1", "node", "(.+)")` - Renames node label to node_name for matching
+
+- SLO Threshold: default TBD based on real world data, but this would be configurable
+- Notes:
+  - For now, we won’t take nodes less than 10 minutes old into account (default wait time for nodes to become ready is 20 minutes).
+  - An easier way to approach this could be to simply exclude nodes that are in `Pending` state, however, we want to make sure that we are not excluding nodes that are for some reason stuck in `Pending` state and never transition to `Running`, which would give us a false positive. Hence, we are using the node creation time as a more reliable way to exclude only nodes that are actively joining the cluster.
+
+### Shoot general availability
+
+- SLI specification: The amount of conditions (specifically `ControlPlaneHealthy`, `SystemComponentsHealthy`, `APIServerAvailable` and `EveryNodeReady`) healthy and progressing vs the total amount of the same conditions. We are explicitly excluding `ObservabilityComponentsHealthy` since it's less important for the customers. This is calculation is done at the shoot level.
+- SLI implementation:
+
+  ```promql
+  avg_over_time(
+    (
+      count(
+        garden_shoot_condition{
+          condition=~"ControlPlaneHealthy|SystemComponentsHealthy|APIServerAvailable|EveryNodeReady"
+        } >= 1
+      )
+      /
+      count(
+        garden_shoot_condition{
+          condition=~"ControlPlaneHealthy|SystemComponentsHealthy|APIServerAvailable|EveryNodeReady"
+        }
+      )
+    )[4w:]
+  ) * 100
+  ```
+
+  - `ControlPlaneHealthy|SystemComponentsHealthy|APIServerAvailable|EveryNodeReady` possible values are : -1 (unknown), 0 (fail), 1 (success), 2 (progressing).
+
+- SLO Threshold: default TBD based on real world data, but this would be configurable
+- Notes:
+  - Sometimes, the shoots can get stuck in `progressing` state. However, there should already be a timeout in Gardener to set the shoot in `unhealthy` state after a certain amount of time, so we are not explicitly excluding `progressing` state here. We are rather considering that if a shoot is in `progressing` state for too long, it will eventually transition to `unhealthy` state and be counted as a failure.
+
+### Shoot creation latency
+
+- SLI specification: The amount of shoots getting fully created within 30 minutes vs the amount of shoots getting fully created.
+- SLI implementation:
+
+  ```promql
+  sum(rate(garden_shoot_operation_duration_minutes_bucket{operation="Create", le="30"}[5m]))
+  /
+  sum(rate(garden_shoot_operation_duration_minutes_count{operation="Create"}[5m]))
+  ```
+
+- SLO Threshold: default TBD based on real world data, but this would be configurable
+- Notes:
+  - We need to implement a histogram metric that doesn't exist at the moment: `garden_shoot_operation_duration_minutes_bucket`. However, to our understanding, there is currently no way to know how long an operation took. It would probably be relatively simple to add a `duration` field to `.status.lastOperation`.
+
+### Shoot reconcile latency
+
+- SLI specification: The amount of shoots where the reconcile state is `Succeeded` within 30 minutes vs the amount of shoots where the reconcile state is `Succeeded`
+- SLI implementation:
+
+  ```promql
+  sum(rate(garden_shoot_operation_duration_minutes_bucket{operation="Reconcile", le="30"}[5m]))
+  /
+  sum(rate(garden_shoot_operation_duration_minutes_count{operation="Reconcile"}[5m]))
+  ```
+
+- SLO Threshold: default TBD based on real world data, but this would be configurable
+- Notes:
+  - Same as for creation latency, we need to implement a histogram metric that doesn't exist at the moment: `garden_shoot_operation_duration_minutes_bucket`.
+
+### Notes/Constraints/Caveats
 
 <!--
 What are the caveats to the proposal?
