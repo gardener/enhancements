@@ -43,7 +43,7 @@ These operators will make it easier for monitoring and logging configurations to
 
 These resources can also be directly referenced in Go and be deployed by their
 respective components, instead of creating `.yaml` files in Go, or templating
-charts. With the addition of the operators it should is easier to provide
+charts. With the addition of the operators it should be easier to provide
 flexible deployment layouts of the components or even introduce new features,
 such as Thanos in the case of prometheus-operator
 
@@ -500,7 +500,7 @@ Add a [sidecar][grafana-sidecar] to Grafana that will pickup dashboards and prov
 The fluent-bit operator oversees two types for resources:
 
 1. `FluentBit` resource defining the properties of the fluent-bit deamonset.
-1. `ClusterInputs`, `ClusterOutputs`, `ClusterFilters` and `ClusterParsers` defining the fluent-but app configuration.
+1. `ClusterInputs`, `ClusterOutputs`, `ClusterFilters` and `ClusterParsers` defining the fluent-bit app configuration.
 
 1. `FluentBit` custom resource
 
