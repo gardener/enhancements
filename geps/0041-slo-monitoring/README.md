@@ -303,7 +303,7 @@ In some cases, the seed cannot be reached from the runtime cluster, so Prometheu
 
 To enable total coverage across a landscape, there are 2 possible solutions:
 
-- **Push-based metrics**: In this approach, instead of relying on Prometheus `federate` (pull) mechanism, we could implement a flag in the seed's configuration to use Prometheus `RemoteWrite` capability to push metrics to the `garden-prometheus` in the runtime cluster. This would require changes in the gardenlet to configure prometheus properly. This also requires the prometheus operator to support `RemoteWrite` (work still ongoing in https://github.com/prometheus-operator/prometheus-operator/issues/6508)
+- **Push-based metrics**: In this approach, instead of relying on Prometheus `federate` (pull) mechanism, we could implement a flag in the seed's configuration to use Prometheus `RemoteWrite` capability to push metrics to the `garden-prometheus` in the runtime cluster. This would require changes in the gardenlet to configure prometheus properly. This also requires the prometheus operator to support `RemoteWrite` (work still ongoing in https://github.com/prometheus-operator/prometheus-operator/issues/6508). See [related issue in monotoring repo](https://github.com/gardener/monitoring/issues/59).
 
 - **Reverse VPN**: Another approach could be to establish a reverse VPN connection from the seed to the runtime cluster, allowing Prometheus to scrape metrics as if it were directly accessible. This would require setting up reversed VPN tunnels for each seed, similar to what we already do between seed<=>shoot clusters. Although this approach could also enable other use cases, it also adds complexity and operational overhead, so it should be carefully evaluated before being implemented.
 
