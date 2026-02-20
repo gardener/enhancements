@@ -10,6 +10,11 @@
     - [Non-Goals](#non-goals)
   - [Proposal](#proposal)
     - [High level Architecture](#high-level-architecture)
+    - [Scalibility](#scalibility)
+    - [Notes/Constraints/Caveats](#notesconstraintscaveats)
+      - [Seed inaccessibility](#seed-inaccessibility)
+    - [Risks and Mitigations](#risks-and-mitigations)
+  - [Design Details](#design-details)
     - [Initial SLOs](#initial-slos)
       - [kube-apiserver general availability](#kube-apiserver-general-availability)
       - [kube-apiserver latency](#kube-apiserver-latency)
@@ -19,10 +24,6 @@
       - [Shoot general availability](#shoot-general-availability)
       - [Shoot creation latency](#shoot-creation-latency)
       - [Shoot reconcile latency](#shoot-reconcile-latency)
-    - [Notes/Constraints/Caveats](#notesconstraintscaveats)
-      - [Seed inaccessibility](#seed-inaccessibility)
-    - [Risks and Mitigations](#risks-and-mitigations)
-  - [Design Details](#design-details)
   - [Drawbacks](#drawbacks)
   - [Alternatives](#alternatives)
   - [References](#references)
@@ -89,7 +90,7 @@ nitty-gritty.
 
 This extension delivers 4 core capabilities:
 
-- **Default and custom SLI**: A set of predefined SLIs based on industry best practices for Kubernetes clusters and Gardener specifics, but always from the customer perspective. However, since the needs of each Gardener operator may vary, these defaults will be configurable. There should also be the ability to define custom SLIs based on specific metrics exposed by Gardener or the shoot clusters. However, those SLIs would need to be generic across the landscape.
+- **Default and custom SLI**: A set of predefined SLIs/SLOs based on industry best practices for Kubernetes clusters and Gardener specifics, but always from the customer perspective. However, since the needs of each Gardener operator may vary, these defaults will be configurable. There should also be the ability to define custom SLIs based on specific metrics exposed by Gardener or the shoot clusters. However, those SLIs would need to be generic across the landscape.
 - **Configurable SLOs**: The SLO parameters (SLI, threshold, ...) should be configurable. Then a templating engine would generate the necessary Prometheus recording rules and Perses dashboards.
 - **SLO-based alerting**: Since we have the data to calculate SLO violations and burn rates (SRE best practice), we should also provide, as part of the extension, the capability to configure an Alertmanager based on those SLOs. Again, this should be configurable to fit the needs of each Gardener operator.
 - **Monitoring infrastructure**: The extension should provide the necessary monitoring infrastructure to collect, store, and visualize SLO-related metrics. This includes Prometheus rules for SLI calculation, Perses dashboards for visualization, Prometheus alerts for SLO violations, Alertmanager to manage those alerts, etc.
@@ -98,6 +99,50 @@ The extension builds on the existing monitoring infrastructure (Prometheus opera
 
 ![SLO extension high-level architecture](./slo-extension-plan.png)
 
+### Scalibility
+
+The metrics used to calculate SLOs are getting scrapped by 2 Prometheus instances: the `garden-prometheus` in the runtime cluster and a dedicated `shoot-prometheus` in each shoot cluster. In order to be able to scale across a landscape with a large number of shoots, we need to make sure that the `slo-prometheus` doesn't do too much processing.
+
+Hence, in order to be able to scale horizontally, the SLI processing related to metrics in the shoot clusters will be done in the `shoot-prometheus`. Then the `slo-prometheus` in the runtime cluster is only responsible for aggregating those precomputed SLIs at the shoot level (through the `aggregate-prometheus` in the seed) and calculating the overall SLOs.
+
+For metrics coming from the `garden-prometheus`, since they are not expected to be as numerous as the ones coming from the shoots, we can afford to do the SLI processing directly in the `slo-prometheus`, in order to have the smallest possible impact on the existing monitoring systems.
+
+### Notes/Constraints/Caveats
+
+<!--
+What are the caveats to the proposal?
+What are some important details that didn't come across above?
+Go in to as much detail as necessary here.
+This might be a good place to talk about core concepts and how they relate.
+-->
+
+### Seed inaccessibility
+
+In some cases, the seed cannot be reached from the runtime cluster, so Prometheus is not able to scrape (federate) metrics from the seed. This is the case when a seed is in a network segment (behind a firewall) that forbids incoming traffic from the runtime cluster. In those cases, gardenlet still works because its connection is initiated from the seed to the runtime/garden cluster (NAT or similar egress policy has to be allowed). Hence, since Prometheus is not able to scrape metrics from the seed, we would not be able to calculate SLOs based on those metrics.
+
+To enable total coverage across a landscape, there are 2 possible solutions:
+
+- **Push-based metrics**: In this approach, instead of relying on Prometheus `federate` (pull) mechanism, we could implement a flag in the seed's configuration to use Prometheus `RemoteWrite` capability to push metrics to the `garden-prometheus` in the runtime cluster. This would require changes in the gardenlet to configure prometheus properly. This also requires the prometheus operator to support `RemoteWrite` (work still ongoing in https://github.com/prometheus-operator/prometheus-operator/issues/6508). See [related issue in monotoring repo](https://github.com/gardener/monitoring/issues/59).
+
+- **Reverse VPN**: Another approach could be to establish a reverse VPN connection from the seed to the runtime cluster, allowing Prometheus to scrape metrics as if it were directly accessible. This would require setting up reversed VPN tunnels for each seed, similar to what we already do between seed<=>shoot clusters. Although this approach could also enable other use cases, it also adds complexity and operational overhead, so it should be carefully evaluated before being implemented.
+
+### Risks and Mitigations
+
+<!--
+What are the risks of this proposal, and how do we mitigate? Think broadly.
+For example, consider both security and how this will impact the larger
+Gardener ecosystem.
+-->
+Since we are precomputing SLIs in the shoot clusters, there is a risk that the additional processing could have an impact on the performance of the `shoot-prometheus`. To mitigate this risk, we will define the SLI as prometheus rules, which would compute each metric shortly after the scrape. This way, we spread the computational overhead over time and avoid having a big spike of CPU usage at the moment of the scrape. We will also make sure to optimize the Prometheus rules as much as possible to minimize the impact on the performance.
+
+## Design Details
+
+<!--
+This section should contain enough information that the specifics of your
+change are understandable. This may include API specs (though not always
+required) or even code snippets. If there's any ambiguity about HOW your
+proposal will be implemented, this is the place to discuss them.
+-->
 ### Initial SLOs
 
 The following SLOs are proposed as initial defaults, based on industry best practices for Kubernetes clusters and Gardener specifics, but always from the customer perspective. These are meant to be configurable, so they can be adapted to the needs of each Gardener operator. They are also meant to be adjusted on a regular basis based on real world data and experience, especially the thresholds. The goal is to have realistic and achievable SLOs that reflect the customer's experience and satisfaction in operating their shoot clusters.
@@ -289,49 +334,12 @@ Notes:
 - Notes:
   - Same as for creation latency, we need to implement a histogram metric that doesn't exist at the moment: `garden_shoot_operation_duration_minutes_bucket`.
 
-### Notes/Constraints/Caveats
-
-<!--
-What are the caveats to the proposal?
-What are some important details that didn't come across above?
-Go in to as much detail as necessary here.
-This might be a good place to talk about core concepts and how they relate.
--->
-### Seed inaccessibility
-
-In some cases, the seed cannot be reached from the runtime cluster, so Prometheus is not able to scrape (federate) metrics from the seed. This is the case when a seed is in a network segment (behind a firewall) that forbids incoming traffic from the runtime cluster. In those cases, gardenlet still works because its connection is initiated from the seed to the runtime/garden cluster (NAT or similar egress policy has to be allowed). Hence, since Prometheus is not able to scrape metrics from the seed, we would not be able to calculate SLOs based on those metrics.
-
-To enable total coverage across a landscape, there are 2 possible solutions:
-
-- **Push-based metrics**: In this approach, instead of relying on Prometheus `federate` (pull) mechanism, we could implement a flag in the seed's configuration to use Prometheus `RemoteWrite` capability to push metrics to the `garden-prometheus` in the runtime cluster. This would require changes in the gardenlet to configure prometheus properly. This also requires the prometheus operator to support `RemoteWrite` (work still ongoing in https://github.com/prometheus-operator/prometheus-operator/issues/6508). See [related issue in monotoring repo](https://github.com/gardener/monitoring/issues/59).
-
-- **Reverse VPN**: Another approach could be to establish a reverse VPN connection from the seed to the runtime cluster, allowing Prometheus to scrape metrics as if it were directly accessible. This would require setting up reversed VPN tunnels for each seed, similar to what we already do between seed<=>shoot clusters. Although this approach could also enable other use cases, it also adds complexity and operational overhead, so it should be carefully evaluated before being implemented.
-
-### Risks and Mitigations
-
-<!--
-What are the risks of this proposal, and how do we mitigate? Think broadly.
-For example, consider both security and how this will impact the larger
-Gardener ecosystem.
--->
-Since the extension introduces additional monitoring components and configurations, there is a risk of increased resource consumption and potential conflicts with existing monitoring setups. Careful planning and testing are required to mitigate these risks.
-
-## Design Details
-
-<!--
-This section should contain enough information that the specifics of your
-change are understandable. This may include API specs (though not always
-required) or even code snippets. If there's any ambiguity about HOW your
-proposal will be implemented, this is the place to discuss them.
--->
-N/A
-
 ## Drawbacks
 
 <!--
 Why should this GEP _not_ be implemented?
 -->
-N/A
+As per the [risks and mitigations section](#risks-and-mitigations) above, there is a risk that the additional processing in the shoot clusters could have an impact on the performance of the `shoot-prometheus`.
 
 ## Alternatives
 
@@ -340,7 +348,8 @@ What other approaches did you consider, and why did you rule them out? These do
 not need to be as detailed as the proposal, but should include enough
 information to express the idea and why it was not acceptable.
 -->
-- **Reusing existing Prometheus instances**: Rejected due to risk of impacting other critical metrics. Since SLO calculations can be resource-intensive, isolating them ensures stability and separation of concerns
+- **Reusing existing Prometheus instances**: Due to a high computational overhead to calculate SLOs, we didn't think it is a good idea to reuse the existing garden-prometheus, since this could potentially have an impact in other metrics. Also, since we need to keep the metrics for a longer period to calculate SLOs (more than the time window choosed for the SLOs), reusing the existing instances with extended retention could lead to resource contention. Hence, isolating the SLO ensures stability and separation of concerns.
+- **Implementing SLOs as part of Gardener core**: This functionnality also adds computational overhead, both for the shoot Prometheus and the aggregate Prometheus, so we believe this should be opt-in for Gardener operators that want to use it.
 
 ## References
 
