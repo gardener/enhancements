@@ -9,7 +9,9 @@
     - [Goals](#goals)
     - [Non-Goals](#non-goals)
   - [Proposal](#proposal)
+    - [High level Architecture](#high-level-architecture)
     - [Notes/Constraints/Caveats (Optional)](#notesconstraintscaveats-optional)
+      - [Seed inaccessibility](#seed-inaccessibility)
     - [Risks and Mitigations](#risks-and-mitigations)
   - [Design Details](#design-details)
   - [Drawbacks](#drawbacks)
@@ -74,6 +76,8 @@ The "Design Details" section below is for the real
 nitty-gritty.
 -->
 
+### High level Architecture
+
 This extension delivers 4 core capabilities:
 
 - **Default and custom SLI**: A set of predefined SLIs based on industry best practices for Kubernetes clusters and Gardener specifics, but always from the customer perspective. However, since the needs of each Gardener operator may vary, these defaults will be configurable. There should also be the ability to define custom SLIs based on specific metrics exposed by Gardener or the shoot clusters. However, those SLIs would need to be generic across the landscape.
@@ -82,7 +86,6 @@ This extension delivers 4 core capabilities:
 - **Monitoring infrastructure**: The extension should provide the necessary monitoring infrastructure to collect, store, and visualize SLO-related metrics. This includes Prometheus rules for SLI calculation, Perses dashboards for visualization, Prometheus alerts for SLO violations, Alertmanager to manage those alerts, etc.
 
 The extension builds on the existing monitoring infrastructure (Prometheus operator, Perses operators, plutono annotations, ...), using a dedicated Prometheus instance in the runtime cluster to collect and aggregate SLO-specific metrics with minimal impact on the existing monitoring systems.
-
 
 ![SLO extension high-level architecture](./slo-extension-plan.png)
 
@@ -94,7 +97,15 @@ What are some important details that didn't come across above?
 Go in to as much detail as necessary here.
 This might be a good place to talk about core concepts and how they relate.
 -->
-N/A
+### Seed inaccessibility
+
+In some cases, the seed cannot be reached from the runtime cluster, so Prometheus is not able to scrape (federate) metrics from the seed. This is the case when a seed is in a network segment (behind a firewall) that forbids incoming traffic from the runtime cluster. In those cases, gardenlet still works because its connection is initiated from the seed to the runtime/garden cluster (NAT or similar egress policy has to be allowed). Hence, since Prometheus is not able to scrape metrics from the seed, we would not be able to calculate SLOs based on those metrics.
+
+To enable total coverage across a landscape, there are 2 possible solutions:
+
+- **Push-based metrics**: In this approach, instead of relying on Prometheus `federate` (pull) mechanism, we could implement a flag in the seed's configuration to use Prometheus `RemoteWrite` capability to push metrics to the `garden-prometheus` in the runtime cluster. This would require changes in the gardenlet to configure prometheus properly. This also requires the prometheus operator to support `RemoteWrite` (work still ongoing in https://github.com/prometheus-operator/prometheus-operator/issues/6508)
+
+- **Reverse VPN**: Another approach could be to establish a reverse VPN connection from the seed to the runtime cluster, allowing Prometheus to scrape metrics as if it were directly accessible. This would require setting up reversed VPN tunnels for each seed, similar to what we already do between seed<=>shoot clusters. Although this approach could also enable other use cases, it also adds complexity and operational overhead, so it should be carefully evaluated before being implemented.
 
 ### Risks and Mitigations
 
