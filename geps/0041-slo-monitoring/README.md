@@ -157,7 +157,7 @@ We decided to focus on 3 main topics for the initial SLOs:
 > We are using a time windows of 28 days by default here, but this is going to be configurable based on the needs of each Gardener operator.
 
 > [!NOTE]
-> We are not aiming for perfection for the initial implementation, but rather to have a good starting point that can be improved over time based on real world data and experience. The goal is rather to have realistic and achievable SLOs that reflect the customer's experience and satisfaction in operating their shoot clusters.
+> We are not aiming for perfection for the initial implementation, but rather to have a good starting point that can be improved over time based on real world data and experience. The goal is rather to have realistic and achievable SLOs that reflect the customer's experience and satisfaction in operating their shoot clusters. Hence, after the initial implementation, we should regularly review, adjust and add SLOs based on the data we collect and the feedback we get from customers and operators.
 
 ### kube-apiserver general availability
 
