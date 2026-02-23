@@ -13,6 +13,7 @@
     - [Scalability](#scalability)
     - [Constraints/Caveats](#constraintscaveats)
       - [Seed inaccessibility](#seed-inaccessibility)
+      - [Using shoot condidions for SLOs](#using-shoot-condidions-for-slos)
     - [Risks and Mitigations](#risks-and-mitigations)
   - [Design Details](#design-details)
     - [Initial SLOs](#initial-slos)
