@@ -10,8 +10,8 @@
     - [Non-Goals](#non-goals)
   - [Proposal](#proposal)
     - [High level Architecture](#high-level-architecture)
-    - [Scalibility](#scalibility)
-    - [Notes/Constraints/Caveats](#notesconstraintscaveats)
+    - [Scalability](#scalability)
+    - [Constraints/Caveats](#constraintscaveats)
       - [Seed inaccessibility](#seed-inaccessibility)
     - [Risks and Mitigations](#risks-and-mitigations)
   - [Design Details](#design-details)
@@ -97,17 +97,17 @@ This extension delivers 4 core capabilities:
 
 The extension builds on the existing monitoring infrastructure (Prometheus operator, Perses operators, plutono annotations, ...), using a dedicated Prometheus instance in the runtime cluster to collect and aggregate SLO-specific metrics with minimal impact on the existing monitoring systems.
 
-![SLO extension high-level architecture](./slo-extension-plan.png)
+![SLO extension high-level architecture](./slo-extension-plan.svg)
 
 ### Scalability
 
-The metrics used to calculate SLOs are getting scrapped by 2 Prometheus instances: the `garden-prometheus` in the runtime cluster and a dedicated `shoot-prometheus` in each shoot cluster. In order to be able to scale across a landscape with a large number of shoots, we need to make sure that the `slo-prometheus` doesn't do too much processing.
+The metrics used to calculate SLOs are getting scrapped by 2 Prometheus instances: the `prometheus-garden` in the runtime cluster and a dedicated `prometheus-shoot` in each shoot cluster. In order to be able to scale across a landscape with a large number of shoots, we need to make sure that the `prometheus-slo` doesn't do too much processing.
 
-Hence, in order to be able to scale horizontally, the SLI processing related to metrics in the shoot clusters will be done in the `shoot-prometheus`. Then the `slo-prometheus` in the runtime cluster is only responsible for aggregating those precomputed SLIs at the shoot level (through the `aggregate-prometheus` in the seed) and calculating the overall SLOs.
+Hence, in order to be able to scale horizontally, the SLI processing related to metrics in the shoot clusters will be done in the `prometheus-shoot`. Then the `prometheus-slo` in the runtime cluster is only responsible for aggregating those precomputed SLIs at the shoot level (through the `prometheus-aggregate` in the seed) and calculating the overall SLOs.
 
-For metrics coming from the `garden-prometheus`, since they are not expected to be as numerous as the ones coming from the shoots, we can afford to do the SLI processing directly in the `slo-prometheus`, in order to have the smallest possible impact on the existing monitoring systems.
+For metrics coming from the `prometheus-garden`, since they are not expected to be as numerous as the ones coming from the shoots, we can afford to do the SLI processing directly in the `prometheus-slo`, in order to have the smallest possible impact on the existing monitoring systems.
 
-### Notes/Constraints/Caveats
+### Constraints/Caveats
 
 <!--
 What are the caveats to the proposal?
@@ -116,13 +116,13 @@ Go in to as much detail as necessary here.
 This might be a good place to talk about core concepts and how they relate.
 -->
 
-### Seed inaccessibility
+#### Seed inaccessibility
 
 In some cases, the seed cannot be reached from the runtime cluster, so Prometheus is not able to scrape (federate) metrics from the seed. This is the case when a seed is in a network segment (behind a firewall) that forbids incoming traffic from the runtime cluster. In those cases, gardenlet still works because its connection is initiated from the seed to the runtime/garden cluster (NAT or similar egress policy has to be allowed). Hence, since Prometheus is not able to scrape metrics from the seed, we would not be able to calculate SLOs based on those metrics.
 
 To enable total coverage across a landscape, there are 2 possible solutions:
 
-- **Push-based metrics**: In this approach, instead of relying on Prometheus `federate` (pull) mechanism, we could implement a flag in the seed's configuration to use Prometheus `RemoteWrite` capability to push metrics to the `garden-prometheus` in the runtime cluster. This would require changes in the gardenlet to configure prometheus properly. This also requires the prometheus operator to support `RemoteWrite` (work still ongoing in https://github.com/prometheus-operator/prometheus-operator/issues/6508). See [related issue in monotoring repo](https://github.com/gardener/monitoring/issues/59).
+- **Push-based metrics**: In this approach, instead of relying on Prometheus `federate` (pull) mechanism, we could implement a flag in the seed's configuration to use Prometheus `RemoteWrite` capability to push metrics to the `prometheus-garden`/`prometheus-slo` in the runtime cluster. This would require changes in the gardenlet to configure prometheus properly. This also requires the prometheus operator to support `RemoteWrite` (work still ongoing in https://github.com/prometheus-operator/prometheus-operator/issues/6508). See [related issue in monotoring repo](https://github.com/gardener/monitoring/issues/59).
 
 - **Reverse VPN**: Another approach could be to establish a reverse VPN connection from the seed to the runtime cluster, allowing Prometheus to scrape metrics as if it were directly accessible. This would require setting up reversed VPN tunnels for each seed, similar to what we already do between seed<=>shoot clusters. Although this approach could also enable other use cases, it also adds complexity and operational overhead, so it should be carefully evaluated before being implemented.
 
@@ -133,7 +133,7 @@ What are the risks of this proposal, and how do we mitigate? Think broadly.
 For example, consider both security and how this will impact the larger
 Gardener ecosystem.
 -->
-Since we are precomputing SLIs in the shoot clusters, there is a risk that the additional processing could have an impact on the performance of the `shoot-prometheus`. To mitigate this risk, we will define the SLI as prometheus rules, which would compute each metric shortly after the scrape. This way, we spread the computational overhead over time and avoid having a big spike of CPU usage at the moment of the scrape. We will also make sure to optimize the Prometheus rules as much as possible to minimize the impact on the performance.
+Since we are precomputing SLIs in the shoot clusters, there is a risk that the additional processing could have an impact on the performance of the `prometheus-shoot`. To mitigate this risk, we will define the SLI as prometheus rules, which would compute each metric shortly after the scrape. This way, we spread the computational overhead over time and avoid having a big spike of CPU usage at the moment of the scrape. We will also make sure to optimize the Prometheus rules as much as possible to minimize the impact on the performance.
 
 ## Design Details
 
@@ -339,7 +339,7 @@ Notes:
 <!--
 Why should this GEP _not_ be implemented?
 -->
-As per the [risks and mitigations section](#risks-and-mitigations) above, there is a risk that the additional processing in the shoot clusters could have an impact on the performance of the `shoot-prometheus`.
+As per the [risks and mitigations section](#risks-and-mitigations) above, there is a risk that the additional processing in the shoot clusters could have an impact on the performance of the `prometheus-shoot`.
 
 ## Alternatives
 
@@ -348,8 +348,8 @@ What other approaches did you consider, and why did you rule them out? These do
 not need to be as detailed as the proposal, but should include enough
 information to express the idea and why it was not acceptable.
 -->
-- **Reusing existing Prometheus instances**: Due to a high computational overhead to calculate SLOs, we didn't think it is a good idea to reuse the existing garden-prometheus, since this could potentially have an impact in other metrics. Also, since we need to keep the metrics for a longer period to calculate SLOs (more than the time window choosed for the SLOs), reusing the existing instances with extended retention could lead to resource contention. Hence, isolating the SLO ensures stability and separation of concerns.
-- **Implementing SLOs as part of Gardener core**: This functionnality also adds computational overhead, both for the shoot Prometheus and the aggregate Prometheus, so we believe this should be opt-in for Gardener operators that want to use it.
+- **Reusing existing Prometheus instances**: Due to a high computational overhead to calculate SLOs, we didn't think it is a good idea to reuse the existing `prometheus-garden`, since this could potentially have an impact in other metrics. Also, since we need to keep the metrics for a longer period to calculate SLOs (more than the time window choosed for the SLOs), reusing the existing instances with extended retention could lead to resource contention. Hence, isolating the SLO ensures stability and separation of concerns.
+- **Implementing SLOs as part of Gardener core**: This functionnality also adds computational overhead for essentially all existing Prometheus instances, so we believe this should be opt-in for Gardener operators that want to use it.
 
 ## References
 
