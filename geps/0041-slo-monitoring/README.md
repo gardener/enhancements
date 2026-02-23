@@ -40,7 +40,7 @@ that the tone and content of the `Summary` section is useful for a wide audience
 
 A good summary is probably at least a paragraph in length.
 -->
-Although Gardener and Kubernetes expose a lot of metrics, there is presently no easy way to evaluate the availability of a shoot from the customer (shoot owner/operator) perspective. In the context that Gardener is meant to run a multitude of Kubernetes clusters at scale, operating it is usually not an easy endeavor. Having such means to measure and monitor the shoot's reliability is a key aspect from both customer happiness and operational excellence.
+Although Gardener and Kubernetes expose a lot of metrics, there is presently no easy way to evaluate the reliability of a shoot from the customer (shoot owner/operator) perspective. In the context that Gardener is meant to run a multitude of Kubernetes clusters at scale, operating it is usually not an easy endeavor. Having such means to measure and monitor the shoot's reliability is a key aspect from both customer happiness and operational excellence.
 
 ## Motivation
 
@@ -126,6 +126,10 @@ To enable total coverage across a landscape, there are 2 possible solutions:
 
 - **Reverse VPN**: Another approach could be to establish a reverse VPN connection from the seed to the runtime cluster, allowing Prometheus to scrape metrics as if it were directly accessible. This would require setting up reversed VPN tunnels for each seed, similar to what we already do between seed<=>shoot clusters. Although this approach could also enable other use cases, it also adds complexity and operational overhead, so it should be carefully evaluated before being implemented.
 
+#### Using shoot condidions for SLOs
+
+We explicitly decided to avoid using shoot conditions for SLOs. Although they are a good source of information about the shoot's health, it is also quite slow to get updated (sometimes gardenlet takes more than 1 minutes to update the conditions). Also, they are very generic and don't necessarily reflect the customer's experience and satisfaction in operating their shoot clusters. Sometimes conditions are failing because (e.g.) 1 pod isn't working, however if the control-plane is using HA, this failing pod might not affact the overall availability of the cluster for the customer. Finally, we eventually want to have SLOs that would reflect the shoot's conditions from the customer's perspective, so using metrics directly from the `prometheus-shoot` seems to be a better approach to have more accurate and timely SLOs.
+
 ### Risks and Mitigations
 
 <!--
@@ -171,7 +175,7 @@ We decided to focus on 3 main topics for the initial SLOs:
       OR
       probe_success{instance="https://kubernetes.default.svc.cluster.local/healthz", type="shoot"}
       OR 
-      on() vector(0)
+      vector(0)
     )[4w:5m]
   ) * 100
   ```
@@ -199,7 +203,7 @@ We decided to focus on 3 main topics for the initial SLOs:
 - SLI implementation:
 
   ```promql
-  (1-(sum(rate(apiserver_request_terminations_total[1h])) or on() vector(0) / sum(rate(apiserver_request_total[1h])))) * 100
+  (1-(sum(rate(apiserver_request_terminations_total[1h])) or vector(0) / sum(rate(apiserver_request_total[1h])))) * 100
   ```
 
 - SLO Threshold: default TBD based on real world data, but this would be configurable
@@ -233,13 +237,14 @@ Notes:
       ) == 0 // pending
     ),
     1
-  ) or on() vector(1)
+  ) or vector(1)
   ```
 
 - SLO Threshold: default TBD based on real world data, but this would be configurable
 - Notes:
   - We need to implement a histogram metric that doesn't exist at the moment: `mcm_machine_creation_duration_minutes_bucket`
   - confirm with MCM experts that the `Pending` state only happens during machine creation.
+  - This metric is highly cloud provider dependant. Hence, we could consider adding labels to the metric to be able to have different SLO thresholds based on the cloud provider.
 
 ### Node general availability
 
