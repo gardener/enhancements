@@ -208,7 +208,7 @@ Notes:
 
 ### Machine creation latency
 
-- SLI specification: The amount of machine trasitionning from `Pending` to `Running` within 20 minutes vs the total amount of nodes `Pending`in the last 20 minutes. If no nodes were pending in the last 20 minutes, the SLO default oto 100%. This is metric is processed at the shoot level.
+- SLI specification: The amount of machine trasitionning from `Pending` to `Running` within 20 minutes vs the total amount of nodes `Pending`in the last 20 minutes. If no nodes were pending in the last 20 minutes, the SLO default to 100%. This is metric is processed at the shoot level.
 - SLI implementation:
 
   ```promql
