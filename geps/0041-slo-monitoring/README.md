@@ -99,7 +99,7 @@ The extension builds on the existing monitoring infrastructure (Prometheus opera
 
 ![SLO extension high-level architecture](./slo-extension-plan.png)
 
-### Scalibility
+### Scalability
 
 The metrics used to calculate SLOs are getting scrapped by 2 Prometheus instances: the `garden-prometheus` in the runtime cluster and a dedicated `shoot-prometheus` in each shoot cluster. In order to be able to scale across a landscape with a large number of shoots, we need to make sure that the `slo-prometheus` doesn't do too much processing.
 
