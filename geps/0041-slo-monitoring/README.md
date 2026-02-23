@@ -49,9 +49,9 @@ This section is for explicitly listing the motivation, goals, and non-goals of
 this GEP. Describe why the change is important and the benefits to users.
 -->
 
-Day-2 operation tooling is a must to help drive adoption. This also mimics industry best practices as described in the [SRE book](https://sre.google/sre-book/table-of-contents/).
+Day-2 operation tooling is a must to help drive adoption. This aligns with industry best practices as described in the [SRE book](https://sre.google/sre-book/table-of-contents/), which emphasizes that managing production systems reliably depending on metrics (SLOs) that give an insight into a system's health and behavior. Without proper tooling to monitor and measure reliability during day-2 operations, Gardener operators lack the foundational data needed to make informed decisions about system improvements and incident response.
 
-This extension also enables Gardener operators and developers to make data-driven decisions about reliability vs feature prioritization while providing clear visibility into system health.
+This extension directly addresses that gap by enabling Gardener operators and developers to make data-driven decisions about reliability versus feature prioritization, while providing clear visibility into system health through SLO-based monitoring, a cornerstone practice in SRE for managing the reliability-velocity trade-off.
 
 This would benefit multiple user personas, including:
 
