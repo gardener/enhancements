@@ -1,0 +1,17 @@
+title: SLO monitoring
+gep-number: 0041
+authors:
+- "@etiennnr"
+- "@xavier-re"
+- "@jguipi"
+- "@sonnyuplavan"
+steering: product
+steering-link: https://gardener.cloud/community/steering/product/0041-slo-monitoring/
+status: provisional|implementable|implemented|deferred|rejected|withdrawn|replaced
+creation-date: 2026-01-26
+reviewers:
+- "@main-reviewer-1"
+- "@main-reviewer-2"
+approvers:
+- "@main-approver-1"
+- "@main-approver-2"
