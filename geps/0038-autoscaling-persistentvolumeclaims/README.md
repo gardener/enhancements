@@ -141,7 +141,7 @@ spec:
       thresholdPercent: 80
       stepPercent: 25
       minStepAbsolute: 1Gi
-      strategy: InPlace | Off
+      resizeStrategy: InPlace | Off
 status:
   conditions:
   - type: Resizing
@@ -156,19 +156,23 @@ status:
     reason: RecommendationsProvided
     lastTransitionTime: "2025-08-07T11:59:54Z"
     message: Recommendations have been provided for all PersistentVolumeClaims.
-  persistentVolumeClaims:
+  volumeRecommendations:
   - persistentVolumeClaimName: prometheus-seed-0
-    usedBytesPercentage: 30
-    usedInodesPercentage: 20
-    currentSize: 4Gi
-    targetSize: 4Gi
     usedByPods: ["prometheus-seed-0"]
+    current:
+      usedBytesPercentage: 30
+      usedInodesPercentage: 20
+      size: 4Gi
+    target:
+      size: 4Gi
   - persistentVolumeClaimName: prometheus-seed-1
-    usedBytesPercentage: 90
-    usedInodesPercentage: 70
-    currentSize: 3Gi
-    targetSize: 4Gi
     usedByPods: ["prometheus-seed-1"]
+    current:
+      usedBytesPercentage: 90
+      usedInodesPercentage: 70
+      size: 3Gi
+    target:
+      size: 4Gi
 ```
 
 ### Key Features
@@ -191,7 +195,7 @@ Each `volumePolicy` exposes the following fields:
 - **`stepPercent`**: The percentage increase applied to the current PVC size during a scale-up operation. For example, `25`% means the new size will be at least 25% larger than the current size.
 - **`minStepAbsolute`**: The minimum absolute storage increase that must be applied during a scaling operation, regardless of the `stepPercent` calculation. This ensures meaningful size increases even for smaller volumes. For example, `1Gi` ensures at least 1 gigabyte is added.
 - **`maxCapacity`**: The maximum allowed size for a PVC. Once this limit is reached, no further scaling will occur.
-- **`strategy`**: Defines how the autoscaler handles the scaling operation. `InPlace` is the default strategy and resizes the volume by directly modifying the corresponding PVC. `Off` disables scaling.
+- **`resizeStrategy`**: Defines how the autoscaler handles the scaling operation. `InPlace` is the default strategy and resizes the volume by directly modifying the corresponding PVC. `Off` disables scaling.
 
 #### Observability and Monitoring
 
@@ -267,14 +271,14 @@ spec:
       thresholdPercent: 60
       stepPercent: 25
       minStepAbsolute: 1Gi
-      strategy: Rsync | OnVolumeDeletion | Off
+      resizeStrategy: Rsync | OnVolumeDeletion | Off
 ```
 
 - **`minCapacity`**: The minimum allowed size for a PVC. Once this limit is reached, no further downscaling will occur.
 - **`stabilizationWindowDuration`** can be used to specify the duration for which the current usage must be below the `thresholdPercent` before triggering downscaling.
 The rationale behind this is that downscaling is a disruptive operation which should be avoided during short-term data reductions, e.g. after some compression operation.
-- **`Rsync`** strategy indicates that downscaling shall be performed by creating a new smaller volume and using rsync to move data from the current volume to the new one.
-- **`OnVolumeDeletion`** strategy indicates that PVC is resized only if it was deleted and the backing volume also deleted. This would require a webhook to mutate the PVC on creation.
+- **`Rsync`** resize strategy indicates that downscaling shall be performed by creating a new smaller volume and using rsync to move data from the current volume to the new one.
+- **`OnVolumeDeletion`** resize strategy indicates that PVC is resized only if it was deleted and the backing volume also deleted. This would require a webhook to mutate the PVC on creation.
 - **`Off`** disables downscaling.
 
 ### PVC Admission Webhook Considerations
