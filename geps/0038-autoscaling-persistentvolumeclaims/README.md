@@ -228,7 +228,7 @@ The PVC autoscaler employs a **simple threshold-based scaling approach** that ma
 
 #### Handling Scale-Up Failures
 
-Generally scaling up depends on the `csi-resizer`, and the `pvc-autoscaler` does not have any direct influence on the actual resize operation - it can only monitor the status of the PVC and modify its `.spec.resources.requests.storage` fields.
+Generally, scaling up depends on the `csi-resizer`, and the `pvc-autoscaler` does not have any direct influence on the actual resize operation - it can only monitor the status of the PVC and modify its `.spec.resources.requests.storage` fields.
 Due to this, recovering from resize failures can only be done for a few specific cases described below.
 
 **VMs that do not support online volume resizing:**
@@ -339,7 +339,7 @@ This will be achieved by implementing provider-specific mutating webhooks for PV
 
 With this we reduce the API surface and keep provider-specific logic out of core Gardener APIs, reduce operational overhead and achieve proper separation of concerns.
 
-Along this way, the `.seed.spec.volumes.minimumSize` field will be deprecated and also moved into a provider-specific webhook.
+Along this way, the `.spec.volumes.minimumSize` field in the `Seed` API will be deprecated and also moved into a provider-specific webhook as well.
 
 #### Integration into Gardener Runtime Clusters
 
