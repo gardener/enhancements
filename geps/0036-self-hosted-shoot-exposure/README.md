@@ -112,11 +112,14 @@ spec:
   type: stackit
   providerConfig: {} # *runtime.RawExtension
 
-  secretRef: # corev1.SecretReference
-    name: cloudprovider
+  credentialsRef: # *corev1.ObjectReference
+    apiVersion: v1
+    kind: Secret
     namespace: kube-system
+    name: cloudprovider
 
   # control plane endpoints that should be exposed
+  port: 443
   endpoints:
   - nodeName: example-control-plane
     addresses: # []corev1.NodeAddress
@@ -124,7 +127,6 @@ spec:
       type: InternalIP
     - address: example-control-plane
       type: Hostname
-    port: 443
   # - ... more endpoints for HA control planes
 status:
   # extensionsv1alpha1.DefaultStatus
@@ -140,9 +142,10 @@ status:
 ```
 
 The `spec` includes the default set of fields included in all extension resources like `type` and `providerConfig` (see [GEP-01](01-extensibility.md)).
-For shoots with managed infrastructure, the `secretRef` field references the credentials secret that should be used by the extension controller to manage the necessary infrastructure resources (similar to the `Infrastructure` extension resource).
+For shoots with managed infrastructure, the `credentialsRef` field references the credentials secret that should be used by the extension controller to manage the necessary infrastructure resources (similar to the `Infrastructure` extension resource).
+The `port` field specifies the port that the API server listens on and that should be exposed via the exposure mechanism.
 Additionally, the `spec.endpoints` list contains all healthy control plane node addresses that should be exposed.
-Each endpoint includes the node name, a list of addresses (based on the `Node.status.addresses` list) and the port of the API server (usually `443`).
+Each endpoint includes the node name and a list of addresses (based on the `Node.status.addresses` list).
 
 Control plane nodes are considered healthy if their `status.conditions` list contains a condition of type `Ready` with status `True` and does not contain any condition of type `{Disk,Memory,PID}Pressure` or `NetworkUnavailable` with a status other than `False` and the node has healthy etcd and kube-apiserver pods.
 Also, control plane nodes that are marked for deletion or maintenance operations (e.g., replacement by machine-controller-manager, cluster-autoscaler scale-down, or in-place update) are excluded from the endpoints list.
