@@ -284,11 +284,14 @@ The rationale behind this is that downscaling is a disruptive operation which sh
 ### PVC Admission Webhook Considerations
 
 An admission webhook for mutating PVCs on creation is **not required** in the current implementation.
-Current workload controllers (StatefulSets, Prometheus, VLSingle) do not overwrite PVC storage requests that have been increased by the `pvc-autoscaler`.
+Current workload controllers (StatefulSets, Prometheus, VLSingle) do not overwrite PVC storage requests when the `pvc-autoscaler` has increased them beyond the size specified in the controller.
 
 Additionally, we do not see it as necessary to mutate newly created PVCs when a new replica is created for the workload.
 In such cases its size will be gradually increased by the `pvc-autoscaler` as more data is added to it.
 We assume that the way data is distributed to new replicas is dependent on the workload, e.g. sharding in Prometheus.
+
+An admission component may be needed if downscaling is introduced in the future to prevent workload controllers from increasing the PVC storage requests back to their original size after the `pvc-autoscaler` has reduced them.
+The design and implementation of such an admission component will be discussed as a separate proposal once a decision to implement downscaling has been made.
 
 ### Architecture Overview
 
