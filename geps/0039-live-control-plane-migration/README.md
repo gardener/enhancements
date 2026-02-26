@@ -253,7 +253,7 @@ By applying the annotation `migration.gardener.cloud/force-shrink-etcd=true`, yo
 On the source side, the presence of this annotation instructs the gardenlet to skip readiness checks for ETCD and KAPI, as these components will naturally fail once their members are removed. The system will immediately update DNS records to point to the destination KAPI. As a result, a brief period of downtime is expected.
 
 > [!NOTE]
-> A comprehensive step-by-step guide will be provided to help recover from various issues.
+> A comprehensive step-by-step guide will be provided to help recover from various issues. Other failures not explicitly documented above should not be specific to live CPM and can be handled through standard recovery procedures, with or without manual intervention.
 
 ### Future Scope
 - Implement LiveCPM for non-HA shoots.
