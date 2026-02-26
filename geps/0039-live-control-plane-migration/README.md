@@ -37,43 +37,6 @@
     - [etcd Gateway](#etcd-gateway)
     - [3-Member etcd Cluster](#3-member-etcd-cluster)
 
-## Table of Contents
-
-- [GEP-0039: Live Control Plane Migration](#gep-0039-live-control-plane-migration)
-  - [Table of Contents](#table-of-contents)
-  - [Table of Contents](#table-of-contents-1)
-  - [Terminology](#terminology)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-  - [Goals](#goals)
-  - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Approach](#approach)
-    - [Prerequisites](#prerequisites)
-    - [Gardener](#gardener)
-      - [Shoot API](#shoot-api)
-      - [Lease Management](#lease-management)
-      - [etcd Peer Communication](#etcd-peer-communication)
-      - [Components with Shoot webhooks/Controller and Shoot-managed resources (TBD)](#components-with-shoot-webhookscontroller-and-shoot-managed-resources-tbd)
-      - [Live Migration Flow](#live-migration-flow)
-    - [etcd-druid](#etcd-druid)
-      - [Six member etcd cluster](#six-member-etcd-cluster)
-      - [Member removal from the cluster](#member-removal-from-the-cluster)
-      - [Decoupling Member Names from Pod Names](#decoupling-member-names-from-pod-names)
-    - [VPN](#vpn)
-    - [Failures and Recovery Strategy](#failures-and-recovery-strategy)
-      - [**ETCD Quorum loss**](#etcd-quorum-loss)
-        - [The destination members are unable to join](#the-destination-members-are-unable-to-join)
-        - [Quorum is lost at any other stage](#quorum-is-lost-at-any-other-stage)
-      - [Kube API Server is unhealthy](#kube-api-server-is-unhealthy)
-        - [ETCD is unhealthy](#etcd-is-unhealthy)
-        - [ETCD is healthy](#etcd-is-healthy)
-    - [Future Scope](#future-scope)
-  - [Alternatives](#alternatives)
-    - [etcd Mirror Maker](#etcd-mirror-maker)
-    - [etcd Gateway](#etcd-gateway)
-    - [3-Member etcd Cluster](#3-member-etcd-cluster)
-
 ## Terminology
 
 **Source Seed** is the seed which currently hosts the control plane of the Shoot cluster.
