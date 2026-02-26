@@ -15,7 +15,6 @@
     - [Reserved Capability Names](#reserved-capability-names)
     - [Worker Properties to Capabilities Mapping](#worker-properties-to-capabilities-mapping)
     - [Updated Image Selection Algorithm](#updated-image-selection-algorithm)
-    - [Admission Logic Changes](#admission-logic-changes)
     - [Provider-Specific Worker Properties](#provider-specific-worker-properties)
     - [Component Changes](#component-changes)
   - [Drawbacks](#drawbacks)
