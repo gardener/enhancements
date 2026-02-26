@@ -178,7 +178,7 @@ For components with webhooks or controllers running in the `Seed` (e.g., Lakom e
   - **Multiple peer addresses**: Each member can have multiple peer addresses, and these peer addresses can be exposed through a load balancer to allow communication between members spanning different Kubernetes clusters.
   - **Bootstrap with existing cluster**: A new functionality will be introduced so that when a new etcd CR is created, its members can join an existing etcd cluster created by a different etcd CR.
   - **Skipping Peer Certificate SAN Validation**:
-`-experimental-peer-skip-client-san-verification` flag allows etcd peer connections to skip client certificate SAN (Subject Alternative Name) verification during TLS handshakes.
+`-peer-skip-client-san-verification` flag allows etcd peer connections to skip client certificate SAN (Subject Alternative Name) verification during TLS handshakes.
 During Live CPM, etcd peer communication spans multiple Kubernetes clusters and is routed through load balancers. etcd performs reverse lookup–based identity verification for peer connections, which would require the load balancer IPs to be present in the peer certificate SANs or resolvable within the etcd pod. However, these load balancer IPs cannot be configured deterministically, as traffic is source-NATed to node IPs before reaching the etcd pods. As a result, reverse lookup cannot reliably resolve the original peer endpoint, causing certificate verification to fail.
 Skipping SAN verification allows peer communication to succeed during the temporary six-member cluster phase while still preserving TLS encryption.
 
