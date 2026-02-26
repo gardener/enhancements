@@ -1,0 +1,16 @@
+title: Gardener Landscape Kit
+gep-number: 0049
+authors:
+- "@timuthy"
+steering: technical
+steering-link: https://gardener.cloud/community/steering/technical/0049-gardener-landscape-kit
+status: implementable
+creation-date: 2026-02-25
+reviewers:
+- "@timebertt"
+- "@ScheererJ"
+- "@rfranzke"
+approvers:
+- "@timebertt"
+- "@ScheererJ"
+- "@rfranzke"
