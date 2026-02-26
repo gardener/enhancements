@@ -212,12 +212,11 @@ Skipping SAN verification allows peer communication to succeed during the tempor
 
 
 ### VPN
-In Gardener, VPN connectivity is required for logging, webhooks in the shoot cluster, and other services to function correctly. During the migration, we want these components to remain operational without any downtime.
+In Gardener, VPN connectivity is required for logging, webhooks, and other services in the shoot cluster to function correctly. These components must remain operational throughout the migration.
 
-To achieve this, a temporary VPN will be used to open the connection from the destination seed to the shoot cluster. Once the VPN connection is removed from the source seed and successfully established with the destination seed, the temporary VPN will be removed.
+To achieve this, a temporary VPN tunnel is established from the shoot cluster to the destination seed using a temporary VPN shoot client with a dedicated DNS record. Once the VPN tunnel from the shoot cluster to the destination seed is established using the original VPN shoot client, the temporary VPN client is removed.
 
 ![LiveCPM VPN flow](livecpm-vpn.svg)
-
 
 ### Failures and Recovery Strategy
 
