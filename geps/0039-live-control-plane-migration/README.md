@@ -114,22 +114,34 @@ To trigger **Live CPM**, a new operation annotation, `gardener.cloud/operation=l
 
 #### Shoot API
 
-A new field `status.liveMigration` will be introduced in the Shoot status to track the status of the migration process.
+A new field `status.liveMigration.conditions` will be introduced to track migration progress using standard Shoot conditions. Each migration step is represented as a distinct condition type, enabling granular observability and allowing the migration to resume from any point if interrupted.
 
 ```yaml
 status:
   liveMigration:
-    source:
-      stepName: string # A unique identifier for the step (e.g., "SixMemberETCDReady", "ExtensionsRestored")
-      status: Succeeded/Error/Failed
-      message: string # Optional detail about the step completion
-      completionTime: string
-    destination:
-      stepName: string # A unique identifier for the step (e.g., "SixMemberETCDReady", "ExtensionsRestored")
-      status: Succeeded/Error/Failed
-      message: string # Optional detail about the step completion
-      completionTime: string
+    conditions:
+    - type: SourceEtcdPreparedForPeerJoin
+      status: "True"
+      lastTransitionTime: "2025-03-15T10:00:00Z"
+      lastUpdateTime: "2025-03-15T10:00:05Z"
+      reason: EtcdExposedViaPeerURLs
+      message: "Source etcd members exposed and ready for peer connections"
+    - type: SixMemberETCDReady
+      status: "True"
+      lastTransitionTime: "2025-03-15T10:01:00Z"
+      lastUpdateTime: "2025-03-15T10:02:30Z"
+      reason: SixMemberClusterFormed
+      message: "Six-member etcd cluster successfully formed with 3 members in source and 3 in destination seed"
+    ...
+    - type: ExtensionsRestored
+      status: "Progressing"
+      lastTransitionTime: "2025-03-15T10:03:00Z"
+      lastUpdateTime: "2025-03-15T10:03:45Z"
+      reason: RestoringExtensions
+      message: "Restoring extension states on destination seed"
 ```
+
+Each gardenlet (source and destination) updates relevant conditions as migration progresses through different steps.
 
 #### Lease Management
 
@@ -226,7 +238,7 @@ To achieve this, a temporary VPN tunnel is established from the shoot cluster to
 
 If the six member cluster is unable to get formed because the members in the destination seed fails to join the cluster, it indicates a fundamental environment issue, likely that the user forced a migration across regions where latency exceeds the supported limits. In this scenario, the safest course of action is to abort the migration and revert to the normal CPM.
 
-To trigger an abort, the annotation `migration.shoot.gardener.cloud/abort-live-migration=true` should be added to the Shoot. This is permitted only while the `liveMigration` status with step `SixMemberETCDReady` is in `Failed` state. Once annotated, you can switch the seed name back to the source seed in the Shoot spec; the gardenlet will then orchestrate the cleanup of migration-specific resources across both the source and destination seeds. The destination gardenlet will also take care to remove the newly added members from the etcd cluster.
+To trigger an abort, the annotation `migration.shoot.gardener.cloud/abort-live-migration=true` should be added to the Shoot. This is permitted only while the `SixMemberETCDReady` condition has status `False` with an appropriate failure reason. Once annotated, you can switch the seed name back to the source seed in the Shoot spec; the gardenlet will then orchestrate the cleanup of migration-specific resources across both the source and destination seeds. The destination gardenlet will also take care to remove the newly added members from the etcd cluster.
 
 
 ##### Quorum is lost at any other stage
