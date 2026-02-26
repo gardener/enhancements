@@ -43,7 +43,7 @@
 
 **Destination Seed** is the seed to which the control plane of the Shoot cluster is being migrated.
 
-**Distant Regions** are regions separated geographicaly with round-trip latency by more than *`180ms`*.
+**Distant Regions** are regions separated geographicaly with round-trip distance more than the configured threshold.
 
 ## Summary
 
@@ -75,6 +75,7 @@ Introducing Live CPM would:
 
 1. Allow Live CPM for non-HA shoots.
 1. Allow changing the Shoot spec during migration.
+1. Supporting Live CPM between seeds running on different cloud providers.
 1. Allowing Live CPM between distant regions.
 1. Replacing the current CPM solution.
 1. Retaining the old logs and metrics from the source seed.
@@ -104,7 +105,9 @@ To trigger **Live CPM**, a new operation annotation, `gardener.cloud/operation=l
 
 ### Prerequisites
 
-- The source and destination seed clusters must not be in Distant Regions. The [scheduler ConfigMap](https://github.com/gardener/gardener/blob/v1.134.1/docs/concepts/scheduler.md#minimal-distance-strategy) can be used to verify the latency information between regions. If this ConfigMap is not available, users may still force the migration by applying an explicit annotation `migration.gardener.cloud/allow-distant-regions=true`, fully aware of the associated risks.
+- The source and destination seed clusters must not be in Distant Regions. Gardener can use the `garden-scheduler` [ConfigMap](https://github.com/gardener/gardener/blob/v1.134.1/docs/concepts/scheduler.md#minimal-distance-strategy) to evaluate the inter-seed "distance" (for example, network latency).
+  - Operators can define a landscape-specific threshold by annotating this ConfigMap with `migration.gardener.cloud/inter-seed-distance-threshold=<value>` (for example, `180` when the distance metric is network latency in milliseconds). The value of `180` was derived from extensive testing across different cloud providers. If operators use a different distance metric, they must adjust the threshold accordingly.
+  - If the scheduler ConfigMap or the threshold annotation is not provided, Gardener cannot determine the distance between seeds. In such cases, operators may still force a migration by annotating the Shoot with `migration.gardener.cloud/allow-distant-regions=true`, fully aware of the associated risks.
 - Both the source and destination seed clusters must be healthy and run the same gardenlet version.
 
 ### Gardener
