@@ -140,7 +140,13 @@ Leases are used to coordinate ownership and leadership. Components that manage r
 
 #### etcd Peer Communication
 
-Each etcd member pod is individually exposed to enable direct and controlled peer communication during migration required for the [six member etcd cluster](#six-member-etcd-cluster), allowing it to communicate with its peers in the destination Seed cluster. This exposure is achieved via Istio, using dedicated `Gateway` and `VirtualService` configurations.
+Each etcd member pod is individually exposed to enable direct and controlled peer communication during migration required for the [six member etcd cluster](#six-member-etcd-cluster), allowing it to communicate with its peers across both the source and destination Seed clusters. This exposure is achieved via Istio, leveraging the `IngressGateway` LoadBalancer in both the source and destination seeds.
+
+For both source and destination seeds, the following resources are created:
+
+- A single `Gateway` resource.
+- Three `VirtualService` resources (one per etcd member) to perform host-based routing to the respective etcd member `Service`.
+- Three `DNSRecord` resources (one per etcd member), each pointing to the respective Seed Istio `IngressGateway` LoadBalancer. Traffic is routed to the correct etcd member via Istio host-based routing defined in the corresponding `VirtualService`.
 
 #### Components with Shoot webhooks/Controller and Shoot-managed resources (TBD)
 
@@ -168,10 +174,10 @@ Open questions remain, such as:
 During Live CPM, etcd peer communication spans multiple Kubernetes clusters and is routed through load balancers. etcd performs reverse lookup–based identity verification for peer connections, which would require the load balancer IPs to be present in the peer certificate SANs or resolvable within the etcd pod. However, these load balancer IPs cannot be configured deterministically, as traffic is source-NATed to node IPs before reaching the etcd pods. As a result, reverse lookup cannot reliably resolve the original peer endpoint, causing certificate verification to fail.
 Skipping SAN verification allows peer communication to succeed during the temporary six-member cluster phase while still preserving TLS encryption.
 
-![LiveCPM etcd 6 member](livecpm-six-member-etcd.png)
+![LiveCPM etcd 6 member](livecpm-six-member-etcd.svg)
 
 #### Member removal from the cluster
-- During the six-member cluster formation, the destination seed cluster’s etcd CR contains fields to bootstrap from the source cluster. To complete the migraion, the etcd member count needs to be brought back to three by removing the members that are part of the source seed cluster. For this, the bootstrap with source cluster field is removed from the destination cluster’s etcd CR. At the time of writing the GEP, it was decided that druid will use [EtcdOpsTask](https://github.com/gardener/etcd-druid/issues/1047) to remove members, and a new member removal task will be introduced.
+- During the six-member cluster formation, the destination seed cluster's etcd CR contains fields to bootstrap from the source cluster. To complete the migration, the etcd member count needs to be brought back to three by removing the members that are part of the source seed cluster. For this, the bootstrap with source cluster field is removed from the destination cluster's etcd CR. We will leverage the GEP-28 (Self-Hosted Shoot Clusters) mechanism for removing etcd members by invoking HTTP endpoints on the backup-restore sidecar.
 
 #### Decoupling Member Names from Pod Names
 - Currently, member names are same as the pod names of the etcd members. In a six-member cluster where members are spread across two Kubernetes clusters, pod names can be the same since they are derived from the etcd CR. This leads to issues where new members cannot join due to conflicting member names.
