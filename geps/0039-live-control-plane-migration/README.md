@@ -17,7 +17,7 @@
       - [Shoot API](#shoot-api)
       - [Lease Management](#lease-management)
       - [etcd Peer Communication](#etcd-peer-communication)
-      - [Components with Shoot webhooks/Controller and Shoot-managed resources (TBD)](#components-with-shoot-webhookscontroller-and-shoot-managed-resources-tbd)
+      - [Components with Shoot webhooks/Controller and Shoot-managed resources](#components-with-shoot-webhookscontroller-and-shoot-managed-resources)
       - [Live Migration Flow](#live-migration-flow)
     - [etcd-druid](#etcd-druid)
       - [Six member etcd cluster](#six-member-etcd-cluster)
@@ -148,13 +148,9 @@ For both source and destination seeds, the following resources are created:
 - Three `VirtualService` resources (one per etcd member) to perform host-based routing to the respective etcd member `Service`.
 - Three `DNSRecord` resources (one per etcd member), each pointing to the respective Seed Istio `IngressGateway` LoadBalancer. Traffic is routed to the correct etcd member via Istio host-based routing defined in the corresponding `VirtualService`.
 
-#### Components with Shoot webhooks/Controller and Shoot-managed resources (TBD)
+#### Components with Shoot webhooks and Controllers reconciling shoot objects
 
-For components where the webhook/controller runs in the Shoot cluster while the corresponding server runs in the Seed cluster (for example, Lakom), the migration approach is still unclear at the time of writing this GEP.
-
-Open questions remain, such as:
-* How would this work for the Cloud Controller Manager (CCM), which is part of the Control Plane resources but does not maintain explicit state in the Control Plane extension?
-* How should CSI components be handled in this scenario?
+For components with webhooks or controllers running in the Seed (e.g., Lakom extension), a brief unavailability is acceptable during the handover to the destination control plane. Webhook requests may fail, and controllers may not reconcile Shoot resources until the destination components are ready. For the initial implementation of Live CPM, this short unavailability is considered an acceptable trade-off. Future iterations may aim to eliminate this downtime entirely.
 
 #### Live Migration Flow
 
