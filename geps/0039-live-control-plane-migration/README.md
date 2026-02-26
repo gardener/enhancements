@@ -109,6 +109,7 @@ To trigger **Live CPM**, a new operation annotation, `gardener.cloud/operation=l
   - Operators can define a landscape-specific threshold by annotating this ConfigMap with `migration.gardener.cloud/inter-seed-distance-threshold=<value>` (for example, `180` when the distance metric is network latency in milliseconds). The value of `180` was derived from extensive testing across different cloud providers. If operators use a different distance metric, they must adjust the threshold accordingly.
   - If the scheduler ConfigMap or the threshold annotation is not provided, Gardener cannot determine the distance between seeds. In such cases, operators may still force a migration by annotating the Shoot with `migration.gardener.cloud/allow-distant-regions=true`, fully aware of the associated risks.
 - Both the source and destination seed clusters must be healthy and run the same gardenlet version.
+  - If seeds are upgraded during migration, the gardenlet with the lower version will pause reconciliation until it is upgraded to match the Shoot's Gardener version.
 
 ### Gardener
 
