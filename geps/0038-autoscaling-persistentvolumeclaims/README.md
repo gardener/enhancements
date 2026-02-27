@@ -37,7 +37,9 @@
       - [Dependency on `csi-resizer`](#dependency-on-csi-resizer)
     - [Scaling Algorithm and API Alternatives](#scaling-algorithm-and-api-alternatives)
       - [VPA's Historical Approach](#vpas-historical-approach)
-      - [Trend based algorithm](#trend-based-algorithm)
+      - [Trend-Based Algorithm](#trend-based-algorithm)
+      - [Gliding Average Algorithm](#gliding-average-algorithm)
+      - [Gliding Maximum Algorithm](#gliding-maximum-algorithm)
     - [Alternative 3rd Party PVC Autoscalers](#alternative-3rd-party-pvc-autoscalers)
       - [Alternative: topolvm/pvc-autoscaler](#alternative-topolvmpvc-autoscaler)
       - [Alternative: lorenzophys/pvc-autoscaler](#alternative-lorenzophyspvc-autoscaler)
@@ -517,12 +519,34 @@ Note that these drops are non-random and caused by periodic compaction or Vali's
 
 Because observability components follow a predictable semi-linear pattern there is no need for the VPA-like approach.
 
-#### Trend based algorithm
+#### Trend-Based Algorithm
 
-A trend based algorithm that calculates the increase of used storage over a given time window and determines how much the PVC has to be scaled up based on that was also considered.
+A trend-based algorithm that calculates the increase of used storage over a given time window and determines how much the PVC has to be scaled up based on that was also considered.
 However, this could behave unexpectedly for workloads that have periodic data compaction or deletion.
 The time window could be such that it miscalculates the storage increase or even detects a downward trend due to the compaction.
 It also adds additional complexity to the controller which does not seem worthwhile.
+
+#### Gliding Average Algorithm
+
+A gliding average algorithm calculates the average of volume utilization metrics over a sliding time window.
+The intent is to smooth out short-term fluctuations and prevent scaling decisions based on temporary spikes.
+Such an algorithm is not suitable to determine whether to resize a PVC, because storage usage usually grows monotonically, unlike CPU or memory which fluctuate.
+The average value would always lag behind the current utilization, which would introduce additional lag when deciding whether to scale up a volume.
+The additional complexity required for such an algorithm is not worth it, compared to a simple threshold-based approach.
+
+#### Gliding Maximum Algorithm
+
+A gliding maximum algorithm tracks the highest utilization value observed within a sliding time window.
+This approach aims to ensure capacity for the highest observed demand.
+This is equivalent to the threshold-based algorithm when scaling up storage - since storage grows monotonically, the maximum value over any recent time window is almost always the current value.
+
+Such an algorithm could be valuable to prevent premature downscaling after temporary storage drops (due to compaction or log cleanup).
+However, downscaling is explicitly a non-goal in this proposal.
+
+A gliding maximum can still be used to calculate the `status.current.usedBytesPercentage` and `status.current.usedInodesPercentage` fields in the PVCA API, so that the frequency of updates to the status field is reduced.
+The size of the sliding window might depend on the workload to effectively reduce the frequency.
+For now, a 12-hour window seems reasonable, considering available disk usage metrics from Prometheus and Vali.
+Alternatively, a high water mark could be used, so that only the highest disk utilization ever reached is recorded in the status.
 
 ### Alternative 3rd Party PVC Autoscalers
 
@@ -584,7 +608,7 @@ We are seeking approval from the Technical Steering Committee to:
 
 1. Approve the proposed API design for the `PersistentVolumeClaimAutoscaler` CRD.
 2. Validate the architectural approach including:
-   - Threshold-based scaling algorithm (vs. historical/percentile and trend based approaches).
+   - Threshold-based scaling algorithm (vs. historical/percentile, trend-based, gliding maximum and gliding average approaches).
    - Automatic PVC discovery from the provided `targetRef`.
    - Integration with `cache` Prometheus in `Seed` clusters.
    - Integration with `garden` Prometheus in Gardener runtime clusters.
