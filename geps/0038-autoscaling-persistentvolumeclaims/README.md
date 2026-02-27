@@ -234,11 +234,20 @@ Generally, scaling up depends on the `csi-resizer`, and the `pvc-autoscaler` doe
 Due to this, recovering from resize failures can only be done for a few specific cases described below.
 
 **VMs that do not support online volume resizing:**
-Some VMs require the volume to be detached for the resize to complete and the workload to be restarted to reinitialize the file system.
-Whether this case has occurred can be determined by checking the conditions and status of the PVC.
-The `pvc-autoscaler` can attempt recovery from such cases by default by evicting the Pods that use the affected PVCs.
-Note that an admission webhook might be required to deny the creation of a Pod which uses a PVC that is currently being resized.
-See the [Cloud Provider Limitations](#cloud-provider-limitations) section for details on the PVC conditions (specifically for Azure) that can be used to detect such cases.
+Some VMs require the volume to be detached for the resize to complete and the corresponding Pod to be restarted to reinitialize the file system.
+Whether this case has occurred can be determined from the `ControllerResizeError` and `FileSystemResizePending` conditions in the PVC status.
+See the [Cloud Provider Limitations](#cloud-provider-limitations) section for Azure for more details on these conditions and the steps that an operator would have to take to complete the resize operation.
+
+The `pvc-autoscaler` can automate these steps as follows:
+1. Watch for the `ControllerResizeError` condition to be added to the PVC that is being resized, and once that happens, evict the Pod that uses it. Eviction is used so that `PodDisruptionBudgets` are respected and unwanted downtime is avoided.
+2. A mutating webhook, part of the `pvc-autoscaler`, adds a [scheduling gate][12] to the Pod's `spec.schedulingGates[]` field when the Pod is re-created by the corresponding workload controller, if the PVC used by the pod has the `ControllerResizeError` condition and is currently being resized.
+3. The scheduling gate prevents the Pod from being scheduled so that enough time can pass for the `VolumeAttachment` to be deleted by the `kube-controller-manager`, the volume detached, and then resized.
+4. The `pvc-autoscaler` watches for the `FileSystemResizePending` condition to be added by the `kubelet` to the PVC.
+Once that happens, the `pvc-autoscaler` removes the scheduling gate from the Pod.
+This allows the Pod to be scheduled.
+When the Pod starts and re-mounts the volume, the file system is automatically re-initialized and the resize operation completes.
+
+The current plan is to implement these steps as part of a separate controller in the `pvc-autoscaler` which will be responsible for evicting affected Pods and removing the scheduling gate once they are ready to be scheduled.
 
 **Insufficient cloud provider resources:**
 When a resize fails due to lack of resources on the cloud provider side, the `pvc-autoscaler` can leverage the [Recovery From Volume Expansion Failure][10] feature available in Kubernetes 1.34+.
@@ -431,7 +440,7 @@ PVCA's `cooldownDuration`, `stepPercent` and `minStepAbsolute` have to be config
 
 **Azure**:
 Some Azure virtual machine types do not support resizing attached volumes while pods that use them are still running.
-When such a volume is resized, the resize fails and the `ControllerResizeError` condition is added to the `.status` of the PVC:
+When a PVC that uses a volume mounted on such a virtual machine is attempted to be resized, the resize operation fails and the `ControllerResizeError` condition is added to the `.status` of the PVC:
 ```yaml
 spec:
   resources:
@@ -463,9 +472,9 @@ status:
     type: ControllerResizeError
 ```
 
-To complete the resize on the provider side, the volume has to be detached.
+The resize must be completed in "offline" mode on the provider side, meaning that the Pod using the PVC has to be deleted and the volume safely detached for resizing.
 
-Afterwards, when the volume has been resized on the provider side, the `FileSystemResizePending` condition with status `True` is added to the `.status` of the PVC (the `ControllerResizeError` condition is not mentioned below for brevity):
+Afterwards, when the volume has been resized, the `FileSystemResizePending` condition with status `True` is added to the `.status` of the PVC (the `ControllerResizeError` condition is not mentioned below for brevity):
 ```yaml
 spec:
   resources:
@@ -485,8 +494,9 @@ status:
     type: FileSystemResizePending
 ```
 
-At this point, the `Pod` which uses the PVC can be restarted.
-This reinitializes the file system, the `.status.capacity.storage` field is updated to the new (scaled-up) value, and the resize operation is completed.
+At this point, the Pod which uses the PVC can be re-created.
+Once the Pod starts up and re-mounts the volume, the file system is resized and the full resize operation finishes.
+The `FileSystemResizePending` and `ControllerResizeError` are removed, and the `.status.capacity.storage` field is updated to the new (scaled-up) value by the `kubelet`.
 
 #### Dependency on `csi-resizer`
 
@@ -557,7 +567,7 @@ The following existing 3rd party PVC autoscalers were evaluated:
 
 **Note:** The evaluation of each autoscaling option also accounts the scenario of offering PVC autoscaling service to `Shoot` owners.
 
-#### Alternative: topolvm/pvc-autoscaler
+#### Alternative: topolvm/pvc-autoresizer
 
 **Overview:**
 An immature solution, closer to the proof-of-concept stage, than to the production-ready stage.
@@ -680,6 +690,7 @@ If the PVC's size is scaled down and is smaller than what is specified in the `V
 - [gardener/etcd-druid][9]
 - [Recovery From Volume Expansion Failure][10]
 - [KEP 5105][11]
+- [Pod Scheduling Readiness][12]
 
 [1]: https://github.com/gardener/etcd-backup-restore
 [2]: https://github.com/prometheus/prometheus/pull/13181
@@ -692,3 +703,4 @@ If the PVC's size is scaled down and is smaller than what is specified in the `V
 [9]: https://github.com/gardener/etcd-druid
 [10]: https://kubernetes.io/blog/2025/09/19/kubernetes-v1-34-recover-expansion-failure/
 [11]: https://github.com/kubernetes/enhancements/issues/5105
+[12]: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-scheduling-readiness/
