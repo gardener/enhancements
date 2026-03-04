@@ -64,6 +64,14 @@ The content discovery in a Kubernetes cluster is based on [Kademlia DHT][content
 The straightforward way to deploy Spegel to a Kubernetes cluster is by using the provided helm chart. However, this has some [drawbacks](https://spegel.dev/docs/faq/#what-should-i-do-if-other-pods-are-scheduled-on-new-nodes-before-spegel) when a new node joins the cluster.
 Our goal is to be able to use Spegel for all images pulled from the kubelet, including the `registry.k8s.io/pause` image. Therefore it was decided to [run][run-spegel-on-host] Spegel registry as a systemd unit service on the node. This requires contributing a new Spegel `bootstrapper` or extending the existing [HTTP bootstrapper](https://github.com/spegel-org/spegel/blob/6f02215fa3fc1d3bbdb11fa62dfa7c07dbe3b7c2/pkg/routing/bootstrap.go#L131-L135).
 
+>[!Note]
+>Container images pulled by the `gardener-node-init.service` via `ctr` cli and `containerd` client will not use `Spegel`, as `Spegel` is not yet available at this time. Here is the list of these images:
+> - gardener-node-agent
+> - hyperkube
+> - opentelemetry-collector / valitail
+> - spegel
+> - other images used in `OSC` to extract `FileContentImageRef` files
+
 #### Kademlia Distributed Hash Table Overview
 
 [Kademlia DHT][kad-dht] is part of libp2p library and is used by Spegel for peer routing and content provider advertisement and discovery. 
