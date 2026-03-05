@@ -2,6 +2,7 @@
 
 ## Table of Contents
 
+- [Summary](#summary)
 - [Motivation](#motivation)
 - [Proposal](#proposal)
   - [Introduction](#introduction)
@@ -15,6 +16,11 @@
 - [Impact and Alternatives](#impact-and-alternatives)
 - [Decision Request](#decision-request)
 - [Appendix (Optional)](#appendix-optional)
+
+## Summary
+
+This proposal introduces a new extension type `registry-spegel` to the [gardener-extension-registry-cache](https://github.com/gardener/gardener-extension-registry-cache) extension. When enabled in the Shoot specification, it will install [Spegel][spegel] local registry mirror on the Shoot cluster nodes.
+Gardener operators should be able to enable `registry-spegel` extension type globally for all Shoots in the Gardener landscape. The local Spegel registry is able to mirror all container images pulled by the kubelet.
 
 ## Motivation
 
