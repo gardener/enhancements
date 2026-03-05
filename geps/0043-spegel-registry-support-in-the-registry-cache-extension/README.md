@@ -116,6 +116,10 @@ type SpegelConfig struct {
 	// Defaults to 19090.
 	// +optional
 	MetricsPort *int32 `json:"metricsPort,omitempty"`
+	// ResolveTags when true Spegel will resolve tags to digests.
+	// Defaults to true.
+	// +optional
+	ResolveTags *bool `json:"resolveTags,omitempty"`
 }
 ```
 
