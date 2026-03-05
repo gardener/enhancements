@@ -146,12 +146,9 @@ Let `kubelet1` on Node1 pull an image. It sends a CRI PullImage request to `cont
 Let `kubelet2` on Node2 pull the same image. In this case, `spegel2` looks up the image content in the DHT and finds that the content is available on Node1. It then fetches the contents from the `spegel1` registry on Node1 and streams it directly into the response to `containerd2`. The `containerd2` then fires the image events and `spegel2` added itself as a content provider to the DHT.
 Finally, let `kubelet<N>` on Node<N> pull the same image. Here, when `spegel<N>` looks for content, it finds that it is available on Node1 and Node2. It will then fetch some layers from Node1 and some from Node2.
 
-### Spegel Binary and Systemd Units
+### Spegel Binary and Systemd Unit
 
-The `spegel` binary will be provided to the node in the `/opt/bin/` folder via the `OperatingSystemConfig` mutation. The same goes for the `spegel_metrics.sh` script used to write metrics to the node-exporter's textfile collector.
-The same approach is used for systemd units:
-
-- `spegel.service` systemd unit service depends on containerd service and must be started before the kubelet service:
+The `spegel` binary will be provided to the node in the `/opt/bin/` folder via the `OperatingSystemConfig` mutation. The same approach is used for `spegel.service` systemd unit that depends on containerd service and must be started before the kubelet service:
 
 ```sh
 [Unit]
@@ -170,22 +167,7 @@ MemoryMax=100M
 ExecStart=/opt/bin/spegel registry <params-list>
 ```
 
-- `spegel-metrics.service` systemd unit service forward Spegel metrics to the node exporter in `/var/lib/node-exporter/textfile-collector/spegel.prom` file:
-```sh
-[Unit]
-Description=spegel metrics daemon
-Documentation=https://github.com/spegel-org/spegel
-After=spegel.service
-BindsTo=spegel.service
-[Install]
-WantedBy=multi-user.target spegel.service
-[Service]
-Restart=always
-RestartSec=5
-ExecStart=/opt/bin/spegel_metrics.sh
-```
-
-Certificates used for `mTLS` with the `Bootstrapper` are also provided.
+Certificates used for `mTLS` with the `Bootstrapper` are also provided via `OperatingSystemConfig` resource.
 
 ### Containerd Configuration
 
@@ -218,7 +200,7 @@ $ cat /etc/containerd/certs.d/_default/hosts.toml
   capabilities = ["pull", "resolve"]
 ```
 
-For existing mirror configurations (e.g., provided by `registry-cache` and `image-rewriter` extensions) it will inject the local spegel registry as a first host entry in the `hosts.toml` file. This will be done via the mutation of `CRIConfig.Containerd.Registries` in `OperatingSystemConfig` and requires also a change in the components that set registry configurations.
+For existing mirror configurations (e.g., provided by `registry-cache` and `image-rewriter` extensions) it will inject the local spegel registry as a first host entry in the `hosts.toml` file. This will be done via the mutation of `CRIConfig.Containerd.Registries` in `OperatingSystemConfig` and requires also a change in the components that mutate registry configurations (via webhooks) to respect this change.
 
 ### Spegel Bootstrapper
 
