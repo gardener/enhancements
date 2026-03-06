@@ -20,7 +20,7 @@
 ## Summary
 
 This proposal introduces a new extension type `registry-spegel` to the [gardener-extension-registry-cache](https://github.com/gardener/gardener-extension-registry-cache) extension. When enabled in the Shoot specification, it will install [Spegel][spegel] local registry mirror on the Shoot cluster nodes.
-Gardener operators should be able to enable `registry-spegel` extension type globally for all Shoots in the Gardener landscape. The local Spegel registry is able to mirror all container images pulled by the kubelet.
+Gardener operators should be able to enable `registry-spegel` extension type globally for all Shoots in a Gardener landscape. The local Spegel registry is able to mirror all container images pulled by the kubelet.
 
 ## Motivation
 
@@ -54,6 +54,34 @@ Providing a peer-to-peer (p2p) image caching solution that is enabled by default
 - **Stakeholders** see reduced costs for NAT Gateways and registries.
 - **Gardener operators** are no longer engaged in monitoring notifications of PV sizes in the registry caches.
 
+
+### Goals
+
+- Introduce `registry-spegel` extension type that installs Spegel local registry mirror on the Shoot cluster nodes.
+- Allow operators to enable `registry-spegel` extension type globally for all Shoots in a Gardener landscape.
+- All container images pulled by the kubelet should go through the Spegel registry mirror.
+
+### Non-Goals
+
+- `registry-spegel` is not replacement for the existing `registry-cache` and `registry-mirror` extension types, and they can be configured together in a containerd hosts.toml file:
+  ```toml
+  server = "https://registry-1.docker.io"
+
+  [host."http://localhost:15500"]
+    capabilities = ["pull", "resolve"]
+
+  [host."https://<docker-registry-service-ip>:5000"]
+    capabilities = ["pull","resolve"]
+    ca = ["/etc/containerd/certs.d/ca-bundle.pem"]
+  ```
+- Support for topology awareness routing to reduce cross zonal traffic is part of future enhancements.
+- Container images pulled by the `gardener-node-init.service` via `ctr` cli and `containerd` client will not use Spegel, as is not yet available at this time; the list of this images is:
+  - gardener-node-agent
+  - hyperkube
+  - opentelemetry-collector / valitail
+  - spegel
+  - other images used in `OperatingSystemConfig` to extract `FileContentImageRef` files
+
 ## Proposal
 
 The proposal is to extend the existing [registry-cache](https://github.com/gardener/gardener-extension-registry-cache) extension with a p2p image cache based on Spegel. A new extension type `registry-spegel` is introduced to configure Spegel registry in the [`_default`][setup-default-mirror-for-all-registries] mirror configuration in `containerd`. Gardener operators should be able to enable the extension globally, i.e. enable for all Shoot in the Gardener landscape.
@@ -69,14 +97,6 @@ The content discovery in a Kubernetes cluster is based on [Kademlia DHT][content
 
 The straightforward way to deploy Spegel to a Kubernetes cluster is by using the provided helm chart. However, this has some [drawbacks](https://spegel.dev/docs/faq/#what-should-i-do-if-other-pods-are-scheduled-on-new-nodes-before-spegel) when a new node joins the cluster.
 Our goal is to be able to use Spegel for all images pulled from the kubelet, including the `registry.k8s.io/pause` image. Therefore it was decided to [run][run-spegel-on-host] Spegel registry as a systemd unit service on the host. This requires contributing a new Spegel `bootstrapper` or extending the existing [HTTP bootstrapper](https://github.com/spegel-org/spegel/blob/6f02215fa3fc1d3bbdb11fa62dfa7c07dbe3b7c2/pkg/routing/bootstrap.go#L131-L135). The [`bootstrapper`](https://github.com/spegel-org/spegel/blob/e0b9c087b1996efff4401dc7cd1cd81eb58fa518/pkg/routing/bootstrap.go#L24) provides a list of bootstrap nodes addresses so that Spegel can joins the p2p cluster, and there is currently no suitable `bootstrapper` if we want to run Spegel on the host as a systemd unit.
-
->[!Note]
->Container images pulled by the `gardener-node-init.service` via `ctr` cli and `containerd` client will not use `Spegel`, as `Spegel` is not yet available at this time. Here is the list of these images:
-> - gardener-node-agent
-> - hyperkube
-> - opentelemetry-collector / valitail
-> - spegel
-> - other images used in `OSC` to extract `FileContentImageRef` files
 
 #### Kademlia Distributed Hash Table Overview
 
