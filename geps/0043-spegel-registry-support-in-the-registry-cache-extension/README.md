@@ -189,8 +189,7 @@ Certificates used for `mTLS` with the `Bootstrapper` are also provided via `Oper
 
 ### Containerd Configuration
 
-The `registry-spegel` extension ensures that the [`discard_unpacked_layers`](https://github.com/containerd/containerd/blob/cb15e731a101d3cfdb94e4c905e43318929104aa/internal/cri/config/config.go#L293-L296) setting is set to false. This is done via `CRIConfig.Containerd.Plugins` in `OperatingSystemConfig`.
-`discard_unpacked_layers` is false by default on gardenlinux:
+The `registry-spegel` extension ensures that the [`discard_unpacked_layers`](https://github.com/containerd/containerd/blob/cb15e731a101d3cfdb94e4c905e43318929104aa/internal/cri/config/config.go#L293-L296) setting is set to `false`. This is done via `CRIConfig.Containerd.Plugins` in `OperatingSystemConfig`. If the value is `true` the image layers are deleted after unpacking and Spegel cannot serve the content. For details, see [Spegel compatibility](https://spegel.dev/docs/getting-started/#compatibility). `discard_unpacked_layers` is `false` by default on gardenlinux:
 ```bash
 $ cat /etc/containerd/config.toml
 disabled_plugins = []
