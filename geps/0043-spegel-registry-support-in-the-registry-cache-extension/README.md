@@ -54,7 +54,6 @@ Providing a peer-to-peer (p2p) image caching solution that is enabled by default
 - **Stakeholders** see reduced costs for NAT Gateways and registries.
 - **Gardener operators** are no longer engaged in monitoring notifications of PV sizes in the registry caches.
 
-
 ### Goals
 
 - Introduce `registry-spegel` extension type that installs Spegel local registry mirror on the Shoot cluster nodes.
@@ -90,7 +89,7 @@ The proposal is to extend the existing [registry-cache](https://github.com/garde
 
 A brief overview of the components used in this proposal.
 
-#### Spegel overview
+#### Spegel Overview
 
 [Spegel][spegel] is a p2p image cache. It runs a local image registry on each node in a Kubernetes cluster. The local registry subscribes for containerd's image related events and serves image blobs and manifests that are available in the containerd image store.
 The content discovery in a Kubernetes cluster is based on [Kademlia DHT][content-provider-routing]. When an image content (blob, manifest or index) is available in the containerd image store, Spegel adds its `digest` to the DHT provider store, announcing that the node provides the content corresponding to the `digest`. Then, when the same `digest` is needed by another node, Spegel searches the DHT for peers that provide the content and pulls it from them.
@@ -100,18 +99,7 @@ Our goal is to be able to use Spegel for all images pulled from the kubelet, inc
 
 #### Kademlia Distributed Hash Table Overview
 
-[Kademlia DHT][kad-dht] is part of libp2p library and is used by Spegel for peer routing and content provider advertisement and discovery. 
-A unique 256 bits ID is [generated](https://github.com/libp2p/go-libp2p/blob/636d44e15abc7bfbd1da09cc9fef674249625ae6/core/peer/peer.go#L163) for each peer node (this is the `Ed25519` public key in Spegel case). Based on the node ID, a routing table consisting of `k`-Buckets is maintained. Peers nodes are placed into `k`-Buckets based on how similar their IDs are to the local node's ID, using `XOR` distance to measure proximity. 
-
-- An example with 4 bits ID 0110 there will be 4 buckets for prefixes 1xxx (distance >= 8), 00xx (distance in [4,5,6,7]), 010x (distance in [2,3]) and 0111 (distance = 1)
-
-  ![alt text](spegel-kad-dht.png)
-
-For each prefix, at most `k` nodes are included. The default value for `k` is [20](https://github.com/libp2p/go-libp2p-kad-dht/blob/77a76e94564531977d4bb65f740674798a39543a/amino/defaults.go#L26).
-
-When a node joins the cluster, it must know the address of at least one peer (also known as [bootstrap peer](https://github.com/libp2p/go-libp2p-kad-dht/blob/0ad6ca5eeecff43283a334120a12f8c0add79f1b/dht.go#L521-L542)). The new node connects to the bootstrap peers and adds them to the routing table. It sends [`FIND_NODE`](https://github.com/libp2p/go-libp2p-kad-dht/blob/0ad6ca5eeecff43283a334120a12f8c0add79f1b/rtrefresh/rt_refresh_manager.go#L246) to bootstrap nodes for its own ID and receive information for the `k` closest nodes, adding them to the routing table. The new node then sends [`FIND_NODE`](https://github.com/libp2p/go-libp2p-kad-dht/blob/0ad6ca5eeecff43283a334120a12f8c0add79f1b/rtrefresh/rt_refresh_manager.go#L263) to the appropriate peers in the routing table for random keys within ranges corresponding to its empty `k`-Buckets. During the peer connection process, other peers may [add](https://github.com/libp2p/go-libp2p-kad-dht/blob/23423e3911906b85db01a829f6e36e3917185cf5/dht.go#L503-L507) the new node ID to their routing tables.
-
-When an image, manifest, or blob becomes available on a node, it sends an [`ADD_PROVIDER`](https://github.com/libp2p/go-libp2p-kad-dht/blob/0ad6ca5eeecff43283a334120a12f8c0add79f1b/routing.go#L437-L466) message to the `k` peers that are closest to the content `digest`. Then, if the `digest` is needed by another node, it sends a [`GET_PROVIDERS`](https://github.com/libp2p/go-libp2p-kad-dht/blob/0ad6ca5eeecff43283a334120a12f8c0add79f1b/routing.go#L538-L619) message to the peers closest to the `digest` and receives a set of peers that provides the content.
+An overview of Kademlia Distributed Hash Table is available [here](#kademlia-distributed-hash-table).
 
 ### Registry Spegel API Design
 
@@ -290,6 +278,21 @@ We are seeking approval from the Technical Steering Committee to validate and ap
 3. Explore and contribute options for topology awareness routing (Future Enhancement).
 
 ## Appendix (Optional)
+
+### Kademlia Distributed Hash Table
+
+[Kademlia DHT][kad-dht] is part of libp2p library and is used by Spegel for peer routing and content provider advertisement and discovery. 
+A unique 256 bits ID is [generated](https://github.com/libp2p/go-libp2p/blob/636d44e15abc7bfbd1da09cc9fef674249625ae6/core/peer/peer.go#L163) for each peer node (this is the `Ed25519` public key in Spegel case). Based on the node ID, a routing table consisting of `k`-Buckets is maintained. Peers nodes are placed into `k`-Buckets based on how similar their IDs are to the local node's ID, using `XOR` distance to measure proximity. 
+
+- An example with 4 bits ID 0110 there will be 4 buckets for prefixes 1xxx (distance >= 8), 00xx (distance in [4,5,6,7]), 010x (distance in [2,3]) and 0111 (distance = 1)
+
+  ![alt text](spegel-kad-dht.png)
+
+For each prefix, at most `k` nodes are included. The default value for `k` is [20](https://github.com/libp2p/go-libp2p-kad-dht/blob/77a76e94564531977d4bb65f740674798a39543a/amino/defaults.go#L26).
+
+When a node joins the cluster, it must know the address of at least one peer (also known as [bootstrap peer](https://github.com/libp2p/go-libp2p-kad-dht/blob/0ad6ca5eeecff43283a334120a12f8c0add79f1b/dht.go#L521-L542)). The new node connects to the bootstrap peers and adds them to the routing table. It sends [`FIND_NODE`](https://github.com/libp2p/go-libp2p-kad-dht/blob/0ad6ca5eeecff43283a334120a12f8c0add79f1b/rtrefresh/rt_refresh_manager.go#L246) to bootstrap nodes for its own ID and receive information for the `k` closest nodes, adding them to the routing table. The new node then sends [`FIND_NODE`](https://github.com/libp2p/go-libp2p-kad-dht/blob/0ad6ca5eeecff43283a334120a12f8c0add79f1b/rtrefresh/rt_refresh_manager.go#L263) to the appropriate peers in the routing table for random keys within ranges corresponding to its empty `k`-Buckets. During the peer connection process, other peers may [add](https://github.com/libp2p/go-libp2p-kad-dht/blob/23423e3911906b85db01a829f6e36e3917185cf5/dht.go#L503-L507) the new node ID to their routing tables.
+
+When an image, manifest, or blob becomes available on a node, it sends an [`ADD_PROVIDER`](https://github.com/libp2p/go-libp2p-kad-dht/blob/0ad6ca5eeecff43283a334120a12f8c0add79f1b/routing.go#L437-L466) message to the `k` peers that are closest to the content `digest`. Then, if the `digest` is needed by another node, it sends a [`GET_PROVIDERS`](https://github.com/libp2p/go-libp2p-kad-dht/blob/0ad6ca5eeecff43283a334120a12f8c0add79f1b/routing.go#L538-L619) message to the peers closest to the `digest` and receives a set of peers that provides the content.
 
 ### Supporting Materials (Linked or Embedded)
 
