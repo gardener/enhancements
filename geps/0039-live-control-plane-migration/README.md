@@ -4,7 +4,6 @@
 
 - [GEP-0039: Live Control Plane Migration](#gep-0039-live-control-plane-migration)
   - [Table of Contents](#table-of-contents)
-  - [Table of Contents](#table-of-contents)
   - [Terminology](#terminology)
   - [Summary](#summary)
   - [Motivation](#motivation)
@@ -15,7 +14,6 @@
     - [Prerequisites](#prerequisites)
     - [Gardener](#gardener)
       - [Shoot API](#shoot-api)
-      - [Lease Management](#lease-management)
       - [etcd Peer Communication](#etcd-peer-communication)
       - [Components with Shoot webhooks and Controllers reconciling shoot objects](#components-with-shoot-webhooks-and-controllers-reconciling-shoot-objects)
       - [Live Migration Flow](#live-migration-flow)
@@ -75,10 +73,10 @@ Introducing Live CPM would:
 
 1. Allow Live CPM for non-HA shoots.
 1. Allow changing the Shoot spec during migration.
-1. Supporting Live CPM between seeds running on different cloud providers.
 1. Allowing Live CPM between distant regions.
 1. Replacing the current CPM solution.
 1. Retaining the old logs and metrics from the source seed.
+1. Migrating `VPACheckpoint`s from the source to the destination seed.
 
 -----
 
@@ -105,11 +103,15 @@ To trigger **Live CPM**, a new operation annotation, `gardener.cloud/operation=l
 
 ### Prerequisites
 
-- The source and destination seed clusters must not be in Distant Regions. Gardener can use the `garden-scheduler` [ConfigMap](https://github.com/gardener/gardener/blob/v1.134.1/docs/concepts/scheduler.md#minimal-distance-strategy) to evaluate the inter-seed "distance" (for example, network latency).
-  - Operators can define a landscape-specific threshold by annotating this ConfigMap with `migration.gardener.cloud/inter-seed-distance-threshold=<value>` (for example, `180` when the distance metric is network latency in milliseconds). The value of `180` was derived from extensive testing across different cloud providers. If operators use a different distance metric, they must adjust the threshold accordingly.
-  - If the scheduler ConfigMap or the threshold annotation is not provided, Gardener cannot determine the distance between seeds. In such cases, operators may still force a migration by annotating the Shoot with `migration.gardener.cloud/allow-distant-regions=true`, fully aware of the associated risks.
+- The source and destination seed clusters must not be in Distant Regions. Gardener can use the `gardener-scheduler` [ConfigMap](https://github.com/gardener/gardener/blob/v1.134.1/docs/concepts/scheduler.md#minimal-distance-strategy) to evaluate the inter-seed "distance" (for example, network latency).
+  - Operators can define a custom threshold by annotating this ConfigMap with `migration.gardener.cloud/inter-seed-distance-threshold=<value>` (for example, `180` when the distance metric is network latency in milliseconds).
+    - The value of `180` was derived from extensive empirical testing across AWS, GCP, and Azure.
+    - At ≥200ms inter-seed latency, kube-apiserver enters `CrashLoopBackOff` on restart. The root cause is the cache initialization phase: on startup, kube-apiserver issues LIST requests for all resource types, and at high latency these operations exceed built-in startup timeouts before the cache is fully populated. The 180ms threshold provides a 20ms safety buffer below this observed failure boundary to account for transient network variability.
+    - If operators use a different distance metric (e.g., normalized weights rather than milliseconds), they must adjust the threshold accordingly.
+  - If the scheduler `ConfigMap` or the threshold annotation is not provided, Gardener cannot determine the distance between seeds. In this case, migration is only allowed if the seeds are in the same region. For seeds in different regions, operators can force a migration by annotating the Shoot with `migration.gardener.cloud/allow-distant-regions=true`, fully aware of the associated risks.
 - Both the source and destination seed clusters must be healthy and run the same gardenlet version.
-  - If seeds are upgraded during migration, the gardenlet with the lower version will pause reconciliation until it is upgraded to match the Shoot's Gardener version.
+  - Before starting migration, each gardenlet reads the other gardenlet's version from the `Seed` resource and blocks until both sides report the same version. This ensures safe coordination if either gardenlet is upgraded during migration.
+- Network connectivity between the source and destination seeds.
 
 ### Gardener
 
@@ -144,13 +146,6 @@ status:
 
 Each gardenlet (source and destination) updates relevant conditions as migration progresses through different steps.
 
-#### Lease Management
-
-Leases are used to coordinate ownership and leadership. Components that manage resources in the `Shoot` cluster and are deployed in the `Seed` cluster should maintain their leases in the `Shoot` cluster. This ensures that only one control plane instance (source or destination) performs operations on the resources at any given time, preventing split-brain scenarios.
-
-> [!NOTE]
-> The [Machine Controller Manager (MCM)](https://github.com/gardener/machine-controller-manager) holds its lease in the `Seed` cluster. This is not an issue because, once the migration starts, the source MCM stops acting, and the destination MCM is expected to take over only after all machines have been migrated to the destination seed.
-
 #### etcd Peer Communication
 
 Each etcd member pod is individually exposed to enable direct and controlled peer communication during migration required for the [six member etcd cluster](#six-member-etcd-cluster), allowing it to communicate with its peers across both the source and destination seed clusters. This exposure is achieved via Istio, leveraging the `IngressGateway` LoadBalancer in both the source and destination seeds.
@@ -158,8 +153,8 @@ Each etcd member pod is individually exposed to enable direct and controlled pee
 For both source and destination seeds, the following resources are created:
 
 - A single `Gateway` resource.
-- Three `VirtualService` resources (one per etcd member) to perform host-based routing to the respective etcd member `Service`.
-- Three `DNSRecord` resources (one per etcd member), each pointing to the respective `Seed` Istio `IngressGateway` LoadBalancer. Traffic is routed to the correct etcd member via Istio host-based routing defined in the corresponding `VirtualService`.
+- A `VirtualService` per etcd member to perform host-based routing to the respective etcd member `Service`, and a `DestinationRule` per etcd member to configure traffic policies for those connections.
+- One `DNSRecord` per etcd member, each pointing to the `Seed` Istio `IngressGateway` LoadBalancer, with traffic routed to the correct member via the corresponding `VirtualService`.
 
 #### Components with Shoot webhooks and Controllers reconciling shoot objects
 
@@ -225,7 +220,7 @@ Skipping SAN verification allows peer communication to succeed during the tempor
 
 ### VPN
 
-In Gardener, VPN connectivity is required for logging, webhooks, and other services in the shoot cluster to function correctly. These components must remain operational throughout the migration.
+In Gardener, VPN connectivity is essential for webhooks, which must remain operational throughout the migration. The VPN is also required for interactive commands like `kubectl logs`, `kubectl exec`, and `kubectl port-forward`, as well as for scraping shoot metrics.
 
 To achieve this, a temporary VPN tunnel is established from the shoot cluster to the destination seed using a temporary VPN shoot client with a dedicated DNS record. Once the VPN tunnel from the shoot cluster to the destination seed is established using the original VPN shoot client, the temporary VPN client is removed.
 
@@ -267,6 +262,7 @@ On the source side, the presence of this annotation instructs the gardenlet to s
 - Implement LiveCPM for non-HA shoots.
 - Automated LiveCPM for seed management.
 - Multihop LiveCPM for migration to distant regions.
+- Add a configuration option to allow operators to define, on a `Seed` level, which other seeds are available or unavailable for migration. This could be implemented using a label selector.
 
 ## Alternatives
 
