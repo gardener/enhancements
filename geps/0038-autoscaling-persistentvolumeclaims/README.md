@@ -143,7 +143,7 @@ spec:
       thresholdPercent: 80
       stepPercent: 25
       minStepAbsolute: 1Gi
-      resizeStrategy: InPlace | Off
+      resizeStrategy: PreferInPlace | InPlace | Off
 status:
   conditions:
   - type: Resizing
@@ -197,7 +197,11 @@ Each `volumePolicy` exposes the following fields:
 - **`stepPercent`**: The percentage increase applied to the current PVC size during a scale-up operation. For example, `25`% means the new size will be at least 25% larger than the current size.
 - **`minStepAbsolute`**: The minimum absolute storage increase that must be applied during a scaling operation, regardless of the `stepPercent` calculation. This ensures meaningful size increases even for smaller volumes. For example, `1Gi` ensures at least 1 gigabyte is added.
 - **`maxCapacity`**: The maximum allowed size for a PVC. Once this limit is reached, no further scaling will occur.
-- **`resizeStrategy`**: Defines how the autoscaler handles the scaling operation. `InPlace` is the default strategy and resizes the volume by directly modifying the corresponding PVC. `Off` disables scaling.
+- **`resizeStrategy`**: Defines how the autoscaler handles the scaling operation.
+  - The `PreferInPlace` strategy is the default one and resizes the volume by directly modifying the corresponding PVC.
+Additionally, if online volume resizing is not supported by the underlying infrastructure, it automatically falls back to offline resizing as described in [Handling Scale-Up Failures](#handling-scale-up-failures).
+  - The `InPlace` strategy only modifies the corresponding PVC and does not handle offline resizing.
+  - `Off` disables scaling.
 
 #### Observability and Monitoring
 
@@ -248,6 +252,9 @@ This allows the Pod to be scheduled.
 When the Pod starts and re-mounts the volume, the file system is automatically re-initialized and the resize operation completes.
 
 The current plan is to implement these steps as part of a separate controller in the `pvc-autoscaler` which will be responsible for evicting affected Pods and removing the scheduling gate once they are ready to be scheduled.
+The webhook, which adds scheduling gates to Pods, will run inside the `pvc-autoscaler` so that all of the aspects are handled by one component.
+
+
 
 **Insufficient cloud provider resources:**
 When a resize fails due to lack of resources on the cloud provider side, the `pvc-autoscaler` can leverage the [Recovery From Volume Expansion Failure][10] feature available in Kubernetes 1.34+.
