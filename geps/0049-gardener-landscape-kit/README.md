@@ -30,6 +30,7 @@ With [Kubernetes](https://kubernetes.io/), [Flux](https://fluxcd.io/), [Kustomiz
 
 While Gardener brings great abstraction and extensibility for managed Kubernetes clusters, it currently lacks a project addressing the setup routines and maintenance of such landscapes.
 Gardener operators are required to implement configuration and landscape management themselves, leading not only to additional complexity for new-starters, but also to significant investments in enterprises.
+GLK provides an important reference implementation for the community. Currently, every company using Gardener in production has its own deployment setup, which means changes in gardener-operator and related components must consider many different use cases and setups. By establishing best practices, common approaches, and recommendations through GLK, the community can move together more closely in these regards.
 Previous attempts to address these needs were made in projects like [garden-setup](https://github.com/gardener-attic/garden-setup). These solutions typically built another abstraction layer and automation on top of Gardener, which proved unsustainable in the long run: they involved brittle upgrade procedures, supported only a fixed set of landscape configurations, and required significant ongoing maintenance effort from project developers.
 In contrast, the Gardener Landscape Kit (GLK) works by exposing the involved Gardener APIs and resources directly to operators, rather than introducing a new abstraction layer. This approach promises more flexibility for landscape operators and less maintenance effort for developers.
 
@@ -40,8 +41,9 @@ In contrast, the Gardener Landscape Kit (GLK) works by exposing the involved Gar
 - Allow modifications to the Flux deployment configurations created by GLK, for instance by adding custom components or adjusting the deployment flow.
 - Support update and migration scenarios for included components.
 - Reduce implementation effort for components integrating into GLK.
-- Support manifest template processing through [OCM](https://ocm.software/), as the standard transport tool in NeoNephos.
+- Optionally support manifest template processing through [OCM](https://ocm.software/), as the standard transport tool in [NeoNephos](https://neonephos.org/). Operators not using OCM can choose alternative mechanisms for image selection, transport, and overwrites.
 - Maintaining a default, static vector of compatible component versions.
+- Provide examples and documentation demonstrating best practices for promotion workflows across environments (e.g., base repository releases to landscape repositories).
 
 ### Non-Goals
 
@@ -49,7 +51,7 @@ In contrast, the Gardener Landscape Kit (GLK) works by exposing the involved Gar
 - Definition of a compatibility matrix for Gardener and extensions.
 - Provide holistic default configuration.
 - Building OCM component descriptors.
-- Bootstrapping a Gardener landscape from scratch, i.e., a running Kubernetes cluster is required. 
+- Bootstrapping a Gardener landscape from scratch, i.e., a running Kubernetes cluster is required.
 
 ## Proposal
 
@@ -64,7 +66,7 @@ GLK generates Kubernetes manifests for Gardener and its extensions using a modul
 GLK automates the resolution and substitution of OCI image references (e.g., in `Helm` charts or `Extension` resources). It consults either an [OCM](https://ocm.software/) component descriptor or a default image vector maintained by GLK.
 This ensures:
 - **Consistent Deployments:** Operators can deploy Gardener and extensions with validated versions out of the box, without manual release management.
-- **Image Transportation:** Validated deployments and images can be promoted across environments (e.g., `Dev` → `Canary` → `Live`).
+- **Image Transportation:** Validated deployments and images can be promoted across environments (e.g., `Dev` → `QA` → `Prod`).
 - **Sovereign Cloud Support:** Required images can be mirrored to private registries for isolated or air-gapped environments.
 
 **Deployment System**
@@ -79,7 +81,7 @@ Further key benefits include:
 
 ![Gardener Landscape Kit diagram](glk-basics.svg)
 
-### Notes/Constraints/Caveats (Optional)
+### Notes/Constraints/Caveats
 
 The Gardener Landscape Kit (GLK) is a standalone toolkit, not a Kubernetes controller, meaning it does not directly watch or reconcile cluster resources.
 Its primary use cases are:
@@ -104,6 +106,9 @@ Git repositories are an essential part for landscape and configuration managemen
 - **Base Repository**: This repository contains the core landscape configurations, modules, and shared resources that are common across multiple landscapes.
 - **Landscape Repository**: These repositories are specific to individual landscapes and typically contain overlay configurations that are merged with the ones found in the base repository.
 
+> [!NOTE]
+> GLK supports both organizational models: a separate repository per landscape (repo-per-landscape) or managing all landscapes in a single monorepo. The choice depends on the operator's preferences and existing organizational structure.
+
 Also see the Kustomize [base and overlay documentation](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/#bases-and-overlays) for more information.
 
 Technically, the Gardener Landscape Kit doesn't use Git directly, but prepares and operates on the directory structure of the filesystem.
@@ -119,7 +124,7 @@ To ensure a smooth deployment flow, a single conceptual component may be split i
 - A `gardener-operator` component, which installs the Operator Helm chart.
 - A `garden` component, which creates the Garden resource in the runtime cluster.
 
-From a technical standpoint, each component implements the `component` interface shown below. GLK invokes this implementation when running the `generate base` or `generate landscape` commands.
+From a technical standpoint, each component implements the `component` interface shown below. GLK invokes the implementations, which are maintained in-tree within the GLK repository, when running the `generate base` or `generate landscape` commands.
 
 ```go
 // Interface is the component's interface that each component must implement.
@@ -141,32 +146,32 @@ During the generation of `base` or `landscape`, components can also manage migra
 > Migration in this scope pertain to checked-in manifests, e.g. the [`OperatorConfiguration`](https://github.com/gardener/gardener/blob/master/example/operator/10-componentconfig.yaml), or if not checked-in, any unmanaged resources in the runtime cluster, such as a backup `Secret`.
 > Any resources managed by Gardener or its extensions, such as control-plane `Deployment`s, are still expected to be migrated by their respective controllers during reconciliation or bootstrap processes (see [Gardenlet migration](https://github.com/gardener/gardener/blob/master/cmd/gardenlet/app/migration.go) for an example).
 
-All generated manifests include basic configuration, reasonable defaults, and inline comments to help operators discover and understand available configuration options. GLK preserves any modifications made by operators through a three-way merge strategy. It maintains a copy of each originally generated manifest in a `.glk` system directory, enabling GLK to detect and merge operator changes with newly generated content.
+All generated manifests include basic configuration, reasonable defaults, and inline comments to help operators discover and understand available configuration options. GLK preserves any modifications made by operators through a three-way merge strategy. It maintains a copy of each originally generated manifest in a `.glk` system directory, enabling GLK to detect and merge operator changes with newly generated content. In case of merge conflicts, operator modifications take precedence over GLK's updated defaults. For example, when an operator changes a default value and the same default value changes in a GLK release, the operator's overwrite is preserved.
 
 **Initial Scope**
 
 The following components are part of the initial delivery scope:
 
-| Component Name                                          | Description                                                                                                                                |
-|---------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
-| `flux`                                                  | Flux deployment and controller configuration (mainly [Source controller](https://fluxcd.io/flux/components/source/))                       |
-| `gardener-operator`                                     | [`HelmRelease`](https://fluxcd.io/flux/components/source/) for `gardener-operator`                                                         |
-| `gardener-garden`                                       | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for `Garden` resource                                       |
-| `virtual-garden-access`                                 | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for generating a Kubeconfig for Flux for the virtual garden |
-| `garden-config`                                         | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for resources applied to the virtual garden                 |
-| `extension-networking-{calico,cilium}`                  | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for networking `Extension` resources                        |
-| `extension-os-{gardenlinux,suse-chost}`                 | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for OS `Extension` resources                                |
-| `extension-provider-{alicloud,azure,aws,gcp,openstack}` | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for provider `Extension` resources                          |
-| `extension-runtime-gvisor`                              | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for runtime `Extension` resource                            |
-| `extension-shoot-cert-service`                          | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for certificate service `Extension` resource                |
-| `extension-shoot-dns-service`                           | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for DNS service `Extension` resource                        |
-| `extension-shoot-networking-problemdetector`            | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for network problem detector `Extension` resource           |
-| `extension-shoot-oidc-service`                          | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for OIDC service `Extension` resource                       |
+| Component Name                                          | Description                                                                                                                                                                                                                                     |
+|---------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `flux`                                                  | Flux deployment and controller configuration ([Source controller](https://fluxcd.io/flux/components/source/), [Kustomize controller](https://fluxcd.io/flux/components/kustomize/), [Helm controller](https://fluxcd.io/flux/components/helm/)) |
+| `gardener-operator`                                     | [`HelmRelease`](https://fluxcd.io/flux/components/source/) for `gardener-operator`                                                                                                                                                              |
+| `gardener-garden`                                       | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for `Garden` resource                                                                                                                                            |
+| `virtual-garden-access`                                 | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for generating a Kubeconfig for Flux for the virtual garden                                                                                                      |
+| `garden-config`                                         | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for resources applied to the virtual garden                                                                                                                      |
+| `extension-networking-{calico,cilium}`                  | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for networking `Extension` resources                                                                                                                             |
+| `extension-os-{gardenlinux,suse-chost}`                 | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for OS `Extension` resources                                                                                                                                     |
+| `extension-provider-{alicloud,azure,aws,gcp,openstack}` | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for provider `Extension` resources                                                                                                                               |
+| `extension-runtime-gvisor`                              | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for runtime `Extension` resource                                                                                                                                 |
+| `extension-shoot-cert-service`                          | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for certificate service `Extension` resource                                                                                                                     |
+| `extension-shoot-dns-service`                           | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for DNS service `Extension` resource                                                                                                                             |
+| `extension-shoot-networking-problemdetector`            | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for network problem detector `Extension` resource                                                                                                                |
+| `extension-shoot-oidc-service`                          | [`Kustomization`](https://fluxcd.io/flux/components/kustomize/kustomizations/) for OIDC service `Extension` resource                                                                                                                            |
 
 **Acceptance Criteria**
 
 GLK should contain components of common interest for the community. Throughout the development of the project, this soft requirement must be redefined, such as:
-- Component owners are obliged to implement component updates and migrations.
+- Component owners (maintainers of the respective Gardener sub-projects, such as `gardener/gardener` or extension repositories) are obliged to implement component updates and migrations.
 - A test environment continuously verifies new component versions.
 - Adding a new component must follow to be defined requirements of GLK; needs approval of GLK maintainers.
 
@@ -184,8 +189,7 @@ A key feature of GLK is its ability to resolve version and OCI information for t
 
 - **OCM Component Descriptors**: [OCM](https://ocm.software/) component descriptors can be used to let GLK resolve OCI references in generated manifests. In addition, this strategy may produce [image vector overwrites](https://github.com/gardener/gardener/blob/master/docs/deployment/image_vector.md) and [image vector component overwrites](https://github.com/gardener/gardener/blob/master/docs/deployment/image_vector.md#image-vectors-for-dependent-components) for Gardener and extensions. This is the recommended approach for productive landscapes that use OCM for releases and component transport.
 
-- **Manual**: This strategy gives operators full control over GLK's version vector ((see this [example](https://github.com/gardener/gardener-landscape-kit/blob/main/componentvector/components.yaml)).
-This allows using tools like [Renovate](https://github.com/renovatebot/renovate) to manage version updates according to a custom policy.
+- **Manual**: This strategy gives operators full control over GLK's version vector (see this [example](https://github.com/gardener/gardener-landscape-kit/blob/main/componentvector/components.yaml)). This allows using tools like [Renovate](https://github.com/renovatebot/renovate) to manage version updates according to a custom policy.
 
 ### Configuration API
 
