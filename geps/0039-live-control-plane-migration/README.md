@@ -129,22 +129,24 @@ status:
       lastUpdateTime: "2025-03-15T10:00:05Z"
       reason: EtcdExposedViaPeerURLs
       message: "Source etcd members exposed and ready for peer connections"
-    - type: FiveMemberETCDReady
+    - type: DestinationEtcdPeersJoined
       status: "True"
       lastTransitionTime: "2025-03-15T10:01:00Z"
       lastUpdateTime: "2025-03-15T10:02:30Z"
-      reason: FiveMemberClusterFormed
-      message: "Five-member etcd cluster successfully formed with 3 members in source seed and 2 in destination seed"
+      reason: PeersJoinedSuccessfully
+      message: "Two etcd peers successfully joined the existing etcd cluster"
     ...
-    - type: ExtensionsRestored
+    - type: SourceSeedCleanUp
       status: "Progressing"
       lastTransitionTime: "2025-03-15T10:03:00Z"
       lastUpdateTime: "2025-03-15T10:03:45Z"
-      reason: RestoringExtensions
-      message: "Restoring extension states on destination seed"
+      reason: CleanUpInProgress
+      message: "Source seed resources are being cleaned up"
 ```
 
 Each gardenlet (source and destination) updates relevant conditions as migration progresses through different steps.
+
+A new `lastOperation` type `LiveMigrate` will be introduced. The `lastOperation` field in the Shoot status will indicate that a live migration is in progress and direct users to `status.liveMigration` for detailed progress tracking.
 
 #### etcd Peer Communication
 
