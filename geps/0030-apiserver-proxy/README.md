@@ -18,15 +18,15 @@
     - [Visualization of the Architecture](#visualization-of-the-architecture)
 
 ## Summary
-
-This proposal reworks the API server proxy (originally introduced in [GEP-08](08-shoot-apiserver-via-sni.md)) to use [HTTP CONNECT requests](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.6) (i.e., HTTP proxy) instead of the [proxy protocol](https://www.haproxy.org/download/3.2/doc/proxy-protocol.txt) for connecting in-cluster clients on the shoot side to the corresponding API server on the seed side.
-With this, the API server proxy uses the same network infrastructure and protocol to connect to the shoot control plane as the shoot's VPN client (see [GEP-14](14-reversed-cluster-vpn.md)).
+[](../0008-shoot-apiserver-via-sni/README.md)
+This proposal reworks the API server proxy (originally introduced in [GEP-08](../0008-shoot-apiserver-via-sni/README.md)) to use [HTTP CONNECT requests](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.6) (i.e., HTTP proxy) instead of the [proxy protocol](https://www.haproxy.org/download/3.2/doc/proxy-protocol.txt) for connecting in-cluster clients on the shoot side to the corresponding API server on the seed side.
+With this, the API server proxy uses the same network infrastructure and protocol to connect to the shoot control plane as the shoot's VPN client (see [GEP-14](../0014-reversed-cluster-vpn/README.md)).
 
 The rework allows more scenarios like using the [ACL extension](https://github.com/stackitcloud/gardener-extension-acl) with opaque (non-transparent) LoadBalancers on the seed side that rely on the proxy protocol themselves to preserve the client's IP.
 
 ## Motivation
 
-Since [GEP-08](08-shoot-apiserver-via-sni.md) introduced shared LoadBalancers for shoot control planes on the seed side, clients need to indicate which control plane they want to connect to through the LoadBalancer.
+Since [GEP-08](../0008-shoot-apiserver-via-sni/README.md) introduced shared LoadBalancers for shoot control planes on the seed side, clients need to indicate which control plane they want to connect to through the LoadBalancer.
 The Envoy proxy in the Istio ingress gateway receives the traffic from the shared LoadBalancer and is responsible for routing traffic to the indicated control plane.
 For this, Gardener currently uses different protocols based on the connection type:
 

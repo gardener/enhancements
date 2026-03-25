@@ -131,10 +131,9 @@ As simple as it is, it has a downside that it relies on the availability of the 
 
 With the proxy-server in place, we need to provide means to enable the proxy-agent in the shoot to establish the connection with the server. As a result, we need to provide a public endpoint through which this channel of communication can be established, i.e., we need a Loadbalancer(s).
 
-
 #### Possible Solution
 
-Using a Loadbalancer / proxy server would not make sense, since this is a pain-point we are trying to eliminate in the first-place, doing so just moves the costs to the control-plane. A possible solution is to communicate over a shared loadbalancer in the seed, similar to what has been proposed in the [SNI Passthrough Proxy for kube-apiservers](./08-shoot-apiserver-via-sni.md) proposal, this way we can prevent the extra-costs for load-balancers.
+Using a Loadbalancer / proxy server would not make sense, since this is a pain-point we are trying to eliminate in the first-place, doing so just moves the costs to the control-plane. A possible solution is to communicate over a shared loadbalancer in the seed, similar to what has been proposed in the [SNI Passthrough Proxy for kube-apiservers](../0008-shoot-apiserver-via-sni/README.md) proposal, this way we can prevent the extra-costs for load-balancers.
 
 With this in mind, we still have other pain-points, namely:
 
@@ -153,6 +152,6 @@ In the first case, we will probably need a proxy for the proxy-server that knows
 - API server proxy can be utilized to invert the connection (only for clusters >= 1.18, for older clusters the old VPN solution will remain).
 - This is achieved by utilizing the `--egress-selector-config-file` flag on the api-server.
 - For monitoring endpoints, the proxy subresources would be the preferable methods to go, but in the future we can also support sidecar proxies that can communicate with the proxy-server.
-- For directing traffic to the correct proxy-server, we will re-use the SNI proxy along with the load-balancer from [the shoot API server via SNI GEP](./08-shoot-apiserver-via-sni.md).
+- For directing traffic to the correct proxy-server, we will re-use the SNI proxy along with the load-balancer from [the shoot API server via SNI GEP](../0008-shoot-apiserver-via-sni/README.md).
 
 

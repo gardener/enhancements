@@ -355,7 +355,7 @@ spec:
 ### Gardener as OIDC Token Issuer
 
 A new component, positively the metadata server from
-[GEP-24](./24-shoot-oidc-issuer.md), will be used to publish the public OIDC
+[GEP-24](../0024-shoot-oidc-issuer/README.md), will be used to publish the public OIDC
 metadata discovery documents `/.well-known/openid-configuration` and `jwks_uri`.
 This component will be only provided with access to the public keys or any other
 public information, it will not hold or have access to any private information
