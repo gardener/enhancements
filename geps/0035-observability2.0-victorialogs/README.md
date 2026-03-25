@@ -12,7 +12,7 @@
 
 ## Terminology
 
-Since this document relies on work that has already been done in [GEP-34](./34-observability2.0-opentelemtry-operator-and-collectors.md), the same terminology applies here as well:
+Since this document relies on work that has already been done in [GEP-34](../0034-observability2.0-opentelemetry/README.md), the same terminology applies here as well:
 - [OTLP](https://opentelemetry.io/docs/specs/otlp/): OpenTelemetry Protocol
 - [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/): A component that can receive, process, and export telemetry data (logs, metrics, traces).
 - [Vali](https://github.com/credativ/vali): A fork of Loki 2.2.1 that is used as the log database in the current Gardener observability stack.
@@ -23,7 +23,7 @@ Since this document relies on work that has already been done in [GEP-34](./34-o
 This proposal introduces the deployment of [VictoriaLogs](https://github.com/VictoriaMetrics/VictoriaLogs) which will act as the replacement for [Vali](https://github.com/credativ/vali) in the control plane of all `Shoot` clusters that have the logging stack enabled, as well as in `Seed` clusters and `Garden` clusters.
 After the work that has been done on [GEP-34](https://github.com/gardener/gardener/pull/11861), we are in a favourable position to easily switch our storage layer for the clusters' log signals.
 
-This document fully relies on [GEP-34](./34-observability2.0-opentelemtry-operator-and-collectors.md) having already been implemented. 
+This document fully relies on [GEP-34](../0034-observability2.0-opentelemetry/README.md) having already been implemented. 
 For this reason, it's expected that the reader is familiar with the concepts and terminology introduced in that GEP.
 
 A new operator is introduced that will be deployed to the `garden` namespace of `Seed` and `Garden` clusters.
@@ -39,7 +39,7 @@ Since then, the Observability stack of Gardener has been using [Vali](https://gi
 However, the fork maintains only security updates, thus leading to no new features or improvements getting integrated.
 As such, an upgrade is due so that we can benefit from new technologies and optimizations in the world of log databases.
 
-One such advancement is [OTLP](https://opentelemetry.io/docs/specs/otel/protocol/), discussed in more detail in [GEP-34](./34-observability2.0-opentelemtry-operator-and-collectors.md).
+One such advancement is [OTLP](https://opentelemetry.io/docs/specs/otel/protocol/), discussed in more detail in [GEP-34](../0034-observability2.0-opentelemetry/README.md).
 After careful consideration, we've converged to using [VictoriaLogs](https://github.com/VictoriaMetrics/VictoriaLogs) as the backend for storing logs. See the [Alternatives](#alternatives) section for more details on why this choice was made.
 
 ### Goals
@@ -117,7 +117,7 @@ spec:
 
 Currently, `Vali` access is behind a service in the namespace of the `Shoot` control plane.
 For external access, there exists an ingress in front of the `OpenTelemetry Collector` in the control plane of `Shoot` clusters that is used to post logs to `Vali`.
-See [GEP-34](./34-observability2.0-opentelemtry-operator-and-collectors.md) for more details.
+See [GEP-34](../0034-observability2.0-opentelemetry/README.md) for more details.
 
 The same setup will continue with `VictoriaLogs`, with the only difference being that the `OpenTelemetry Collector` will be configured to ship logs to `VictoriaLogs` via `OTLP` instead of to `Vali` via the `Loki` protocol.
 

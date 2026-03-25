@@ -1,6 +1,6 @@
 # GEP-0017: Shoot Control Plane Migration "Bad Case" Scenario
 
-The [migration flow](07-shoot-control-plane-migration.md#migration-workflow) described as part of [GEP-7](07-shoot-control-plane-migration.md) can only be executed if both the Garden cluster and source seed cluster are healthy, and the `gardenlet` in the source seed cluster can connect to the Garden cluster. In this case, the `gardenlet` can directly scale down the shoot's control plane in the source seed, after checking the `spec.seedName` field.
+The [migration flow](../0007-shoot-control-plane-migration/README.md#migration-workflow) described as part of [GEP-7](../0007-shoot-control-plane-migration/README.md) can only be executed if both the Garden cluster and source seed cluster are healthy, and the `gardenlet` in the source seed cluster can connect to the Garden cluster. In this case, the `gardenlet` can directly scale down the shoot's control plane in the source seed, after checking the `spec.seedName` field.
 
 However, there might be situations in which the `gardenlet` in the source seed cluster can't connect to the Garden cluster and determine that `spec.seedName` has changed. Similarly, the connection to the seed `kube-apiserver` could also be broken. This might be caused by issues with the seed cluster itself. In other situations, the migration flow steps in the source seed might have started but might not be able to finish successfully. In all such cases, it should still be possible to migrate a shoot's control plane to a different seed, even though executing the migration flow steps in the source seed might not be possible. The potential "split brain" situation caused by having the shoot's control plane components attempting to reconcile the shoot resources in two different seeds must still be avoided, by ensuring that the shoot's control plane in the source seed is deactivated before it is activated in the destination seed.
 
@@ -64,7 +64,7 @@ The mechanism to copy the snapshots and pass the ownership from the source to th
 
 11. The additional "source" backup entry referencing the source seed backup container is deleted from the Garden cluster and the destination seed. As a result, its corresponding `source-etcd-backup` secret is also deleted from the destination seed.
 
-12. From this point, the reconciliation flow proceeds as already described in [GEP-7](07-shoot-control-plane-migration.md). This is safe, since the source seed cluster is no longer able to interfere with the shoot.
+12. From this point, the reconciliation flow proceeds as already described in [GEP-7](../0007-shoot-control-plane-migration/README.md). This is safe, since the source seed cluster is no longer able to interfere with the shoot.
 
 ## Handling Inability to Access the Backup Container
 

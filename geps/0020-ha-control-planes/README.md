@@ -340,7 +340,7 @@ The Gardener Resource Manager is already set up with `spec.replicas: 3` today. O
 ### etcd
 
 In contrast to other components, it's not trivial to run multiple replicas for `etcd` because different rules and considerations apply to form a quorum-based cluster [ref](https://etcd.io/docs/v3.4/op-guide/clustering/).
-Most of the complexity (e.g. cluster bootstrap, scale-up) is already outsourced to [Etcd-Druid](https://github.com/gardener/etcd-druid) and efforts have been made to support many use-cases already (see [gardener/etcd-druid#107](https://github.com/gardener/etcd-druid/issues/107) and [Multi-Node etcd GEP](https://github.com/gardener/etcd-druid/blob/master/docs/proposals/multi-node/README.md)). Please note that, especially for `etcd`, an `active-passive` alternative was evaluated in the [etcd Active-Passive Options](#etcd-active-passive-options) section. Due to the complexity and implementation effort it was decided to proceed with the `active-active` built-in support, but to keep this as a reference in case we encounter blockers in the future.
+Most of the complexity (e.g. cluster bootstrap, scale-up) is already outsourced to [Etcd-Druid](https://github.com/gardener/etcd-druid) and efforts have been made to support many use-cases already (see [gardener/etcd-druid#107](https://github.com/gardener/etcd-druid/issues/107) and [Multi-Node etcd GEP](https://github.com/gardener/etcd-druid/blob/master/docs/proposals/01-multi-node-etcd-clusters.md)). Please note that, especially for `etcd`, an `active-passive` alternative was evaluated in the [etcd Active-Passive Options](#etcd-active-passive-options) section. Due to the complexity and implementation effort it was decided to proceed with the `active-active` built-in support, but to keep this as a reference in case we encounter blockers in the future.
 
 #### Gardener `etcd` Component Changes
 
@@ -685,7 +685,7 @@ For these tests - for payload size = 1MB, the total number of key-value pairs re
 
 In a nutshell, we do not see any major concerns w.r.t latencies in a multi-zonal setup as compared to single-zone HA setup or single node etcd.
 
-> **Note:** A detailed network latency analysis can be viewed in the [Network Latency Analysis](https://github.com/gardener/etcd-druid/blob/master/docs/etcd-network-latency.md) topic.
+> **Note:** A detailed network latency analysis can be viewed in the [Network Latency Analysis](https://github.com/gardener/etcd-druid/blob/master/docs/benchmark/etcd-network-latency.md) topic.
 
 ### Cross-Zonal Traffic
 

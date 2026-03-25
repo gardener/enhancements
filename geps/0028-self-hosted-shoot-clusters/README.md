@@ -327,7 +327,7 @@ The general procedure of bootstrapping a self-hosted shoot cluster is similar in
 
 In this scenario, the starting point is right on the first machine that shall be transformed into a control plane node.
 It is assumed that the network was set up properly (see [Prerequisites](#prerequisites)).
-Since machine management is out of scope, upgrades requiring to roll out the nodes (e.g., Kubernetes version upgrades, operating system upgrades, CA rotation, [see more](https://github.com/gardener/gardener/tree/master/docs/usage/shoot_updates.md#rolling-update-triggers)) must be performed in-place.
+Since machine management is out of scope, upgrades requiring to roll out the nodes (e.g., Kubernetes version upgrades, operating system upgrades, CA rotation, [see more](https://github.com/gardener/gardener/blob/master/docs/usage/shoot-operations/shoot_updates.md#rolling-update-triggers)) must be performed in-place.
 We will leverage the functionality that is to be developed in the scope of [#10219](https://github.com/gardener/gardener/issues/10219).
 This will also include operating system upgrades [planned for Garden Linux](https://github.com/gardener/gardener/issues/10219#issuecomment-2262299606).
 
@@ -461,7 +461,7 @@ This was important as the control plane and the data plane were running in diffe
 In the self-hosted shoot cluster scenario, this is no longer the case.
 The control plane can directly communicate with the data plane without the need for a VPN connection.
 
-- The `apiserver-proxy` (see [GEP-11](11-apiserver-network-proxy.md) for details) is used to forward requests from the data plane directed at `kubernetes.default.svc.cluster.local` to the control plane.
+- The `apiserver-proxy` (see [GEP-11](../0011-apiserver-network-proxy/README.md) for details) is used to forward requests from the data plane directed at `kubernetes.default.svc.cluster.local` to the control plane.
   In the self-hosted shoot cluster scenario, this can be simplified by directly pointing `kubernetes.default.svc.cluster.local` to the actual endpoints of the `kube-apiserver`.
   This way, the `apiserver-proxy` is no longer needed.
   Another aspect is the [mutating webhook for injecting the `KUBERNETES_SERVICE_HOST` environment variable](https://github.com/gardener/gardener/tree/master/docs/concepts/resource-manager.md#kubernetes-service-host-injection), which can be disabled in the self-hosted shoot cluster scenario as well.
