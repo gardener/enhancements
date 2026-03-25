@@ -30,7 +30,9 @@ With [Kubernetes](https://kubernetes.io/), [Flux](https://fluxcd.io/), [Kustomiz
 
 While Gardener brings great abstraction and extensibility for managed Kubernetes clusters, it currently lacks a project addressing the setup routines and maintenance of such landscapes.
 Gardener operators are required to implement configuration and landscape management themselves, leading not only to additional complexity for new-starters, but also to significant investments in enterprises.
+
 GLK provides an important reference implementation for the community. Currently, every company using Gardener in production has its own deployment setup, which means changes in gardener-operator and related components must consider many different use cases and setups. By establishing best practices, common approaches, and recommendations through GLK, the community can move together more closely in these regards.
+
 Previous attempts to address these needs were made in projects like [garden-setup](https://github.com/gardener-attic/garden-setup). These solutions typically built another abstraction layer and automation on top of Gardener, which proved unsustainable in the long run: they involved brittle upgrade procedures, supported only a fixed set of landscape configurations, and required significant ongoing maintenance effort from project developers.
 In contrast, the Gardener Landscape Kit (GLK) works by exposing the involved Gardener APIs and resources directly to operators, rather than introducing a new abstraction layer. This approach promises more flexibility for landscape operators and less maintenance effort for developers.
 
@@ -146,7 +148,7 @@ During the generation of `base` or `landscape`, components can also manage migra
 > Migration in this scope pertain to checked-in manifests, e.g. the [`OperatorConfiguration`](https://github.com/gardener/gardener/blob/master/example/operator/10-componentconfig.yaml), or if not checked-in, any unmanaged resources in the runtime cluster, such as a backup `Secret`.
 > Any resources managed by Gardener or its extensions, such as control-plane `Deployment`s, are still expected to be migrated by their respective controllers during reconciliation or bootstrap processes (see [Gardenlet migration](https://github.com/gardener/gardener/blob/master/cmd/gardenlet/app/migration.go) for an example).
 
-All generated manifests include basic configuration, reasonable defaults, and inline comments to help operators discover and understand available configuration options. GLK preserves any modifications made by operators through a three-way merge strategy. It maintains a copy of each originally generated manifest in a `.glk` system directory, enabling GLK to detect and merge operator changes with newly generated content. In case of merge conflicts, operator modifications take precedence over GLK's updated defaults. For example, when an operator changes a default value and the same default value changes in a GLK release, the operator's overwrite is preserved.
+All generated manifests include basic configuration, reasonable defaults, and inline comments to help operators discover and understand available configuration options. GLK preserves any modifications made by operators through a three-way merge strategy. It maintains a copy of each originally generated manifest in a `.glk` system directory, enabling GLK to detect and merge operator changes with newly generated content. A configuration option allows operators to decide whether merge conflicts should be automatically resolved by preserving custom values, or whether conflicts should be marked in the file for manual resolution.
 
 **Initial Scope**
 
@@ -198,13 +200,15 @@ A configuration file is required for GLK. Below is an excerpt of the planned API
 ```yaml
 apiVersion: config.glk.gardener.cloud/v1alpha1
 kind: LandscapeKitConfiguration
-# git: # Version control information for GLK to produce Flux configuration
+# paths: # path information for GLK to generate manifests in the filesystem
+#   base: ./base
+#   landscape: ./
+# git: # git repository information used for Flux source configuration
 #   url: https://github.com/<org>/<repo>
 #   ref:
 #     branch: <branch-name>
-#   paths:
-#     base: ./base
-#     landscape: ./
+# oci: # OCI repository information used for Flux source configuration - alternative to git
+#   url: https://oci-registry.com/<org>/<repo>
 # components: # Control of enabled and disabled components
 #   exclude: # optional - to explicitly exclude components, otherwise none are excluded by default
 #   - component-name
