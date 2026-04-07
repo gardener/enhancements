@@ -53,6 +53,7 @@ A topic typically requires a GEP if it meets **any** of the following:
 - Has **relevant cross-team impact**
 - **Significantly impacts Gardener users or ecosystem**
 - Introduces **high technical or operational risk**
+- Introduces a **new Gardener extension** in the [Gardener GitHub organization](https://github.com/gardener)
 
 If unsure, reach out to a steering committee member for guidance.
 
