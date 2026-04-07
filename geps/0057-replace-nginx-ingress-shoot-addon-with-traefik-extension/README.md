@@ -18,6 +18,8 @@
     - [Admission Webhook](#admission-webhook)
     - [Lifecycle Management](#lifecycle-management)
     - [Scope Restriction: Evaluation Shoots Only](#scope-restriction-evaluation-shoots-only)
+  - [Future Enhancements](#future-enhancements)
+    - [Traefik Version Handling](#traefik-version-handling)
   - [Drawbacks](#drawbacks)
   - [Alternatives](#alternatives)
     - [1. Continue Shipping Ingress NGINX](#1-continue-shipping-ingress-nginx)
@@ -43,7 +45,7 @@ as the official, community-owned Gardener extension that deploys
 shoot clusters.  The extension follows the standard Gardener extension
 contract (controller registration, `ManagedResource`-based deployment,
 admission webhooks) and provides a migration-friendly path for workloads that
-previously relied on NGINX-specific Ingress annotations.
+previously relied on NGINX-specific `Ingress` annotations.
 
 ---
 
@@ -53,7 +55,7 @@ Gardener has historically shipped `nginx-ingress-controller` as part of its
 shoot addons (`spec.addons.nginxIngress`).  Users and platform teams have
 built ingress routing on top of this addon.  The Kubernetes
 community's November 2025 announcement of Ingress NGINX's retirement — with
-best-effort maintenance ceasing in March 2026 — creates an urgent need for a
+best-effort maintenance ceasing in March 2026 — creates an need for a
 supported, production-grade replacement.
 
 Key problems this GEP addresses:
@@ -73,17 +75,17 @@ Key problems this GEP addresses:
 
 * **Ecosystem alignment**: The Kubernetes ecosystem is actively converging on
   [Gateway API](https://gateway-api.sigs.k8s.io/) as the successor to the
-  Ingress resource.  Traefik ships with first-class Gateway API support
-  alongside classic Ingress support, providing a forward-compatible landing
+  `Ingress` resource.  Traefik ships with first-class Gateway API support
+  alongside classic `Ingress` support, providing a forward-compatible landing
   zone for Gardener users.
 
-* **Operator choice**: By delivering the replacement as a standard extension,
+* **Operator choice**: By delivering the replacement as an extension,
   Gardener operators retain flexibility — they can offer Traefik, offer a
   different ingress controller of their choice, or offer both side-by-side.
 
 ### Goals
 
-1. Introduce `gardener-extension-shoot-traefik` as an officially maintained
+1. Introduce `gardener-extension-shoot-traefik` as an
    extension in the [Gardener GitHub organization](https://github.com/gardener).
 2. Provide a drop-in migration path for shoot clusters previously using
    `spec.addons.nginxIngress`, including annotation compatibility via a
@@ -100,11 +102,12 @@ Key problems this GEP addresses:
 1. This GEP does **not** propose migrating Gardener core to Gateway API.
    Traefik's Gateway API capabilities can be enabled by users independently
    once this extension is in place.
+   The migration of gardener/gardener itself is tracked in https://github.com/gardener/gardener/issues/13448.
 2. This GEP does **not** deprecate or remove the legacy `spec.addons.nginxIngress`
    field.  The deprecation path for the old addon is a separate concern and is addressed in https://github.com/gardener/gardener/pull/13845.
 3. This GEP does **not** prescribe a single ingress controller for all
    Gardener setups.  Operators are free to use any other ingress extension;
-   this proposal covers only the officially maintained Traefik extension.
+   this proposal covers only the Traefik extension.
 4. This GEP does **not** cover multi-tenant ingress isolation, network
    policies, or advanced traffic shaping beyond what Traefik exposes out
    of the box through its standard Kubernetes Ingress and IngressRoute CRDs.
@@ -147,6 +150,7 @@ The extension type identifier is **`shoot-traefik`** (referenced in
   Ingress resources referencing `kubernetes.io/ingress.class: nginx` to be
   picked up without modification.  Only a subset of NGINX-specific annotations
   is translated by Traefik; unsupported annotations are silently ignored.
+  The supported NGINX annotations are listed in the Traefik documentation: [Annotations support](https://doc.traefik.io/traefik/reference/routing-configuration/kubernetes/ingress-nginx/#annotations-support).
 
 * **Dashboard disabled by default.**  The Traefik API and dashboard
   (`spec.dashboard: true`) expose all routing configuration including
@@ -163,9 +167,9 @@ The extension type identifier is **`shoot-traefik`** (referenced in
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| Traefik annotation subset is insufficient for NGINX migration | Medium | High | The `KubernetesIngressNGINX` provider mode covers the most commonly used annotations.  Unsupported annotations are documented.  Users requiring full NGINX annotation support should consider a Traefik IngressRoute migration or another ingress controller. |
-| CRD conflicts if Traefik is pre-installed in the shoot | Low | High | The reconciler applies CRDs idempotently with server-side apply so version skew is handled.  A future enhancement could detect pre-existing CRD installations and skip or merge. |
-| Extension limited to evaluation shoots limits production adoption | High | Medium | The evaluation-purpose restriction will be re-evaluated (and likely lifted) in a follow-up once the extension has been validated in evaluation clusters and a broader test matrix is in place. |
+| Traefik annotation subset is insufficient for NGINX migration | Medium | High | The `KubernetesIngressNGINX` provider mode covers the most commonly used annotations.  [Unsupported annotations](https://doc.traefik.io/traefik-hub/api-gateway/reference/routing/kubernetes/ref-ingress-nginx#unsupported-nginx-annotations) are documented.  Users requiring full NGINX annotation support should consider a Traefik IngressRoute migration or another ingress controller. |
+| CRD conflicts if Traefik is pre-installed in the shoot | Low | High | The reconciler applies CRDs idempotently with server-side apply so version skew is handled. |
+| Extension limited to evaluation shoots limits production adoption | High | Medium | The evaluation-purpose restriction will be re-evaluated (and likely lifted) once the extension has been validated in evaluation clusters and a broader test matrix is in place. |
 | Legacy addon and new extension run simultaneously | Low | Medium | Both the old nginx addon and the Traefik extension register separate IngressClasses (`nginx` / `traefik`), so they can coexist without routing conflicts during a migration window.  Documentation will advise against using both long-term. |
 
 ---
@@ -176,7 +180,7 @@ The extension type identifier is **`shoot-traefik`** (referenced in
 
 The extension is installed as Gardener resources:
 
-Either as extension
+Either as `Extension`
 
 ```yaml
 # Extension
@@ -217,7 +221,7 @@ spec:
     type: shoot-traefik
     workerlessSupported: false
 ```
- or as controller deployment and controller registration.
+ or as `ControllerDeployment` and `ControllerRegistration`.
 
 ```yaml
 # ControllerDeployment
@@ -337,11 +341,83 @@ evaluation clusters.
 
 ---
 
+## Future Enhancements
+
+### Traefik Version Handling
+
+In the initial release the Traefik version is pinned inside the extension
+binary — every extension release ships exactly one Traefik version.  Upgrading
+Traefik therefore requires upgrading the extension itself.
+
+Future work should decouple the Traefik version from the extension release by
+following a pattern similar to GardenLinux machine image versioning in
+`CloudProfile`.  The operator defines a catalog of up to three Traefik image
+versions in the extension deployment values, each with a classification that
+controls lifecycle and rollout:
+
+```yaml
+# Extension deployment values (operator-managed)
+traefik:
+  versions:
+    - version: "3.3.0"
+      classification: preview       # early access, evaluation shoots only
+      imageRef: "docker.io/library/traefik:v3.3.0"
+    - version: "3.2.4"
+      classification: supported     # production-ready, default for new shoots
+      imageRef: "docker.io/library/traefik:v3.2.4"
+    - version: "3.1.9"
+      classification: deprecated    # still usable, scheduled for removal
+      imageRef: "docker.io/library/traefik:v3.1.9"
+      expirationDate: "2026-09-01T00:00:00Z"
+```
+
+**Classification semantics** (aligned with
+[GEP-32](../0032-version-classification-lifecycle/README.md)):
+
+| Classification | Meaning |
+|----------------|---------|
+| `preview`      | Available for testing; only selectable on `purpose: evaluation` shoots. |
+| `supported`    | Production-ready; used as default when no explicit version is requested. |
+| `deprecated`   | Still functional but scheduled for removal after `expirationDate`. Existing shoots keep running; new shoots receive a warning. |
+
+Users select a version in the `TraefikConfig` provider config:
+
+```yaml
+apiVersion: traefik.extensions.gardener.cloud/v1alpha1
+kind: TraefikConfig
+spec:
+  version: "3.2.4"            # pin to a specific version from the catalog
+  ingressProvider: KubernetesIngress
+```
+
+If `spec.version` is omitted, the extension defaults to the latest
+`supported` version from the catalog.
+
+**Key aspects of the design:**
+
+* **Operator-controlled version catalog.**  Operators define up to three
+  Traefik versions in the extension deployment values.  This decouples Traefik
+  upgrades from extension controller upgrades and lets operators stage new
+  Traefik releases through `preview` → `supported` → `deprecated` before
+  removal.
+
+* **Controlled rollout.**  New Traefik releases enter as `preview`, limiting
+  exposure to evaluation shoots.  Once validated, the operator promotes the
+  version to `supported`.  The previously supported version moves to
+  `deprecated` with an expiration date, giving shoot owners time to migrate.
+
+* **Version skew policy.**  Each extension release documents the Traefik
+  versions it is tested against.  The admission webhook validates that the
+  requested version exists in the operator-provided catalog and that its
+  classification permits use on the shoot's purpose.
+
+---
+
 ## Drawbacks
 
 * **Incomplete annotation parity with NGINX**: The `KubernetesIngressNGINX`
-  compatibility mode does not support all NGINX annotations.  Users relying on
-  unsupported annotations (e.g. complex `nginx.ingress.kubernetes.io/configuration-snippet`
+  compatibility mode does not support all NGINX annotations, see [unsupported annotations](https://doc.traefik.io/traefik-hub/api-gateway/reference/routing/kubernetes/ref-ingress-nginx#unsupported-nginx-annotations).
+    Users relying on unsupported annotations (e.g. complex `nginx.ingress.kubernetes.io/configuration-snippet`
   directives) will need additional migration effort beyond switching the
   ingress provider mode.
 
