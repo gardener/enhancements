@@ -190,14 +190,27 @@ metadata:
   name: gardener-extension-shoot-traefik
 spec:
   deployment:
+    admission:
+      runtimeCluster:
+        helm:
+          ociRepository:
+            ref: europe-docker.pkg.dev/gardener-project/releases/charts/gardener/extensions/admission-shoot-traefik-runtime:latest
+        values:
+          image:
+            repository: europe-docker.pkg.dev/gardener-project/releases/gardener/extensions/gardener-extension-shoot-traefik
+            tag: latest
+      virtualCluster:
+        helm:
+          ociRepository:
+            ref: europe-docker.pkg.dev/gardener-project/releases/charts/gardener/extensions/admission-shoot-traefik-application:latest
     extension:
       helm:
         ociRepository:
-          ref: europe-docker.pkg.dev/gardener-project/releases/charts/gardener/extensions/gardener-extension-shoot-traefik:v0.1.0
+          ref: europe-docker.pkg.dev/gardener-project/releases/charts/gardener/extensions/gardener-extension-shoot-traefik:latest
       values:
         image:
           repository: europe-docker.pkg.dev/gardener-project/releases/gardener/extensions/gardener-extension-shoot-traefik
-          tag: v0.1.0
+          tag: latest
         replicaCount: 1
         resources:
           requests:
@@ -345,7 +358,7 @@ evaluation clusters.
 
 ### Traefik Version Handling
 
-In the initial release the Traefik version is pinned inside the extension
+In the initial release, the Traefik version is pinned inside the extension
 binary — every extension release ships exactly one Traefik version.  Upgrading
 Traefik therefore requires upgrading the extension itself.
 
