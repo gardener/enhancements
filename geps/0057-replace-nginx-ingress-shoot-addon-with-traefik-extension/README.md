@@ -278,8 +278,8 @@ spec:
   # Number of Traefik replica pods (default: 2)
   replicas: 2
 
-  # Traefik log level: DEBUG | INFO | WARN | ERROR | FATAL | PANIC (default: INFO)
-  logLevel: INFO
+  # Traefik log level: Debug | Info | Warn | Error | Fatal | Panic (default: Info)
+  logLevel: Info
 
   # Ingress provider mode:
   #   KubernetesIngress      — standard Kubernetes Ingress (ingress class: "traefik")
