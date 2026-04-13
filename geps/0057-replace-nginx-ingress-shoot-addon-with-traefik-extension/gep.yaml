@@ -1,0 +1,13 @@
+title: "Replace Nginx Ingress Shoot Addon with Traefik Extension"
+gep-number: 0057
+authors:
+- "@docktofuture"
+steering-link: https://gardener.cloud/community/steering/57-shoot-traefik
+status: provisional
+creation-date: 2026-04-02
+reviewers:
+- "@ScheererJ"
+- "@rfranzke"
+- "@timebertt"
+approvers:
+
