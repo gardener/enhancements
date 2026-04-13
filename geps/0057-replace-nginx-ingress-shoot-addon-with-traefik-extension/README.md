@@ -19,6 +19,7 @@
     - [Lifecycle Management](#lifecycle-management)
     - [Scope Restriction: Evaluation Shoots Only](#scope-restriction-evaluation-shoots-only)
   - [Future Enhancements](#future-enhancements)
+    - [Feature Gate Configuration](#feature-gate-configuration)
     - [Traefik Version Handling](#traefik-version-handling)
   - [Drawbacks](#drawbacks)
   - [Alternatives](#alternatives)
@@ -28,7 +29,6 @@
     - [4. Ingress NGINX Fork / Community Takeover](#4-ingress-nginx-fork--community-takeover)
     - [5. Different Ingress Controller (e.g. Contour, Emissary, HAProxy Ingress)](#5-different-ingress-controller-eg-contour-emissary-haproxy-ingress)
 
----
 
 ## Summary
 
@@ -47,7 +47,6 @@ contract (controller registration, `ManagedResource`-based deployment,
 admission webhooks) and provides a migration-friendly path for workloads that
 previously relied on NGINX-specific `Ingress` annotations.
 
----
 
 ## Motivation
 
@@ -112,7 +111,6 @@ Key problems this GEP addresses:
    policies, or advanced traffic shaping beyond what Traefik exposes out
    of the box through its standard Kubernetes Ingress and IngressRoute CRDs.
 
----
 
 ## Proposal
 
@@ -140,9 +138,10 @@ The extension type identifier is **`shoot-traefik`** (referenced in
 
 * **Traefik CRDs are installed into the shoot cluster.**  The IngressRoute,
   Middleware, and other Traefik CRDs are embedded in the extension binary and
-  applied on every reconcile.  Operators should be aware that these CRDs will
-  exist in all shoots where the extension is enabled, even if users do not use
-  IngressRoute objects.
+  included in the shoot `ManagedResource` on every reconcile.  The Gardener
+  resource-manager applies them to the shoot cluster using server-side apply.
+  Operators should be aware that these CRDs will exist in all shoots where the
+  extension is enabled, even if users do not use IngressRoute objects.
 
 * **Ingress class `nginx` for NGINX-compat mode.**  When `ingressProvider:
   KubernetesIngressNGINX` is configured, the extension registers the Traefik
@@ -168,11 +167,10 @@ The extension type identifier is **`shoot-traefik`** (referenced in
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
 | Traefik annotation subset is insufficient for NGINX migration | Medium | High | The `KubernetesIngressNGINX` provider mode covers the most commonly used annotations.  [Unsupported annotations](https://doc.traefik.io/traefik-hub/api-gateway/reference/routing/kubernetes/ref-ingress-nginx#unsupported-nginx-annotations) are documented.  Users requiring full NGINX annotation support should consider a Traefik IngressRoute migration or another ingress controller. |
-| CRD conflicts if Traefik is pre-installed in the shoot | Low | High | The reconciler applies CRDs idempotently with server-side apply so version skew is handled. |
+| CRD conflicts if Traefik is pre-installed in the shoot | Low | High | CRDs are part of the shoot `ManagedResource` and are applied by the Gardener resource-manager using server-side apply, so pre-existing CRDs (e.g. from a user-managed Traefik installation) are updated idempotently without field-ownership conflicts. |
 | Extension limited to evaluation shoots limits production adoption | High | Medium | The evaluation-purpose restriction will be re-evaluated (and likely lifted) once the extension has been validated in evaluation clusters and a broader test matrix is in place. |
 | Legacy addon and new extension run simultaneously | Low | Medium | Both the old nginx addon and the Traefik extension register separate IngressClasses (`nginx` / `traefik`), so they can coexist without routing conflicts during a migration window.  Documentation will advise against using both long-term. |
 
----
 
 ## Design Details
 
@@ -348,13 +346,22 @@ This allows:
   production-grade SLA expectations.
 
 The restriction is enforced exclusively in the admission webhook and can be
-removed or made configurable by operators without any API change.  A follow-up
-proposal will be raised once the extension has been running stably in
-evaluation clusters.
+removed or made configurable by operators without any API change.
 
----
 
 ## Future Enhancements
+
+### Feature Gate Configuration
+
+In the initial release, the extension's behaviour is controlled exclusively
+through `TraefikConfig` provider config fields and the admission webhook's
+hard-coded evaluation-purpose restriction.  A future iteration will expose
+selected behaviours (e.g. enabling production-shoot support or activating
+experimental Gateway API integration) via
+Gardener-style feature gates on the extension manager.  This allows operators
+to opt individual seeds or environments into new or experimental functionality
+without requiring a new extension release, and aligns with the feature-gate
+model used in Gardener core.
 
 ### Traefik Version Handling
 
@@ -362,69 +369,12 @@ In the initial release, the Traefik version is pinned inside the extension
 binary — every extension release ships exactly one Traefik version.  Upgrading
 Traefik therefore requires upgrading the extension itself.
 
-Future work should decouple the Traefik version from the extension release by
-following a pattern similar to GardenLinux machine image versioning in
-`CloudProfile`.  The operator defines a catalog of up to three Traefik image
-versions in the extension deployment values, each with a classification that
-controls lifecycle and rollout:
+A future iteration will decouple the Traefik version from the extension
+release, allowing operators to manage a catalog of Traefik versions for example with
+lifecycle classifications (aligned with
+[GEP-32](../0032-version-classification-lifecycle/README.md)) and letting
+shoot owners pin a specific version.
 
-```yaml
-# Extension deployment values (operator-managed)
-traefik:
-  versions:
-    - version: "3.3.0"
-      classification: preview       # early access, evaluation shoots only
-      imageRef: "docker.io/library/traefik:v3.3.0"
-    - version: "3.2.4"
-      classification: supported     # production-ready, default for new shoots
-      imageRef: "docker.io/library/traefik:v3.2.4"
-    - version: "3.1.9"
-      classification: deprecated    # still usable, scheduled for removal
-      imageRef: "docker.io/library/traefik:v3.1.9"
-      expirationDate: "2026-09-01T00:00:00Z"
-```
-
-**Classification semantics** (aligned with
-[GEP-32](../0032-version-classification-lifecycle/README.md)):
-
-| Classification | Meaning |
-|----------------|---------|
-| `preview`      | Available for testing; only selectable on `purpose: evaluation` shoots. |
-| `supported`    | Production-ready; used as default when no explicit version is requested. |
-| `deprecated`   | Still functional but scheduled for removal after `expirationDate`. Existing shoots keep running; new shoots receive a warning. |
-
-Users select a version in the `TraefikConfig` provider config:
-
-```yaml
-apiVersion: traefik.extensions.gardener.cloud/v1alpha1
-kind: TraefikConfig
-spec:
-  version: "3.2.4"            # pin to a specific version from the catalog
-  ingressProvider: KubernetesIngress
-```
-
-If `spec.version` is omitted, the extension defaults to the latest
-`supported` version from the catalog.
-
-**Key aspects of the design:**
-
-* **Operator-controlled version catalog.**  Operators define up to three
-  Traefik versions in the extension deployment values.  This decouples Traefik
-  upgrades from extension controller upgrades and lets operators stage new
-  Traefik releases through `preview` → `supported` → `deprecated` before
-  removal.
-
-* **Controlled rollout.**  New Traefik releases enter as `preview`, limiting
-  exposure to evaluation shoots.  Once validated, the operator promotes the
-  version to `supported`.  The previously supported version moves to
-  `deprecated` with an expiration date, giving shoot owners time to migrate.
-
-* **Version skew policy.**  Each extension release documents the Traefik
-  versions it is tested against.  The admission webhook validates that the
-  requested version exists in the operator-provided catalog and that its
-  classification permits use on the shoot's purpose.
-
----
 
 ## Drawbacks
 
@@ -438,7 +388,6 @@ If `spec.version` is omitted, the extension defaults to the latest
   `Ingress` objects will have Traefik-specific CRDs installed in their shoot.
   This adds a small amount of API surface that may be unexpected.
 
----
 
 ## Alternatives
 
