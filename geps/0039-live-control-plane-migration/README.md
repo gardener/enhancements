@@ -105,7 +105,7 @@ To trigger **Live CPM**, a new operation annotation, `gardener.cloud/operation=l
 
 - The source and destination seed clusters must not be in Distant Regions. Gardener can use the `gardener-scheduler` [ConfigMap](https://github.com/gardener/gardener/blob/v1.134.1/docs/concepts/scheduler.md#minimal-distance-strategy) to evaluate the inter-seed "distance" (for example, network latency).
   - Operators can define a custom threshold by annotating this ConfigMap with `migration.gardener.cloud/inter-seed-distance-threshold=<value>` (for example, `180` when the distance metric is network latency in milliseconds).
-    - The value of `180` was derived from extensive empirical testing across AWS, GCP, and Azure.
+    - The value of 180 was derived from extensive empirical testing across AWS, GCP, and Azure.
     - At ≥200ms inter-seed latency, kube-apiserver enters `CrashLoopBackOff` on restart. The root cause is the cache initialization phase: on startup, kube-apiserver issues LIST requests for all resource types, and at high latency these operations exceed built-in startup timeouts before the cache is fully populated. The 180ms threshold provides a 20ms safety buffer below this observed failure boundary to account for transient network variability.
     - If operators use a different distance metric (e.g., normalized weights rather than milliseconds), they must adjust the threshold accordingly.
   - If the scheduler `ConfigMap` or the threshold annotation is not provided, Gardener cannot determine the distance between seeds. In this case, migration is only allowed if the seeds are in the same region. For seeds in different regions, operators can force a migration by annotating the Shoot with `migration.gardener.cloud/allow-distant-regions=true`, fully aware of the associated risks.
@@ -150,7 +150,7 @@ A new `lastOperation` type `LiveMigrate` will be introduced. The `lastOperation`
 
 #### etcd Peer Communication
 
-Each etcd member pod is individually exposed to enable direct and controlled peer communication during migration required for the [five member etcd cluster](#five-member-etcd-cluster), allowing it to communicate with its peers across both the source and destination seed clusters. This exposure is achieved via Istio, leveraging the `IngressGateway` LoadBalancer in both the source and destination seeds.
+Each etcd member pod is individually exposed to enable direct and controlled peer communication during migration required for the [five member etcd cluster](#five-member-etcd-cluster), allowing it to communicate with its peers across both the source and destination seed clusters. This exposure is achieved via Istio, leveraging the `IngressGateway` loadbalancer in both the source and destination seeds.
 
 For both source and destination seeds, the following resources are created:
 
@@ -236,7 +236,7 @@ To achieve this, a temporary VPN tunnel is established from the shoot cluster to
 
 If the five-member cluster cannot be formed because the destination members fail to join, it indicates a fundamental environment issue — likely that the user forced a migration across regions where latency exceeds the supported limits. In this scenario, the safest course of action is to abort the migration and revert to the normal CPM.
 
-To trigger an abort, the annotation `migration.shoot.gardener.cloud/abort-live-migration=true` should be added to the Shoot. This is permitted only while the `FiveMemberETCDReady` condition has status `False` with an appropriate failure reason. Once annotated, you can switch the seed name back to the source seed in the Shoot spec; the gardenlet will then orchestrate the cleanup of migration-specific resources across both the source and destination seeds. The destination gardenlet will also take care to remove the newly added members from the etcd cluster.
+To trigger an abort, the annotation `migration.shoot.gardener.cloud/abort-live-migration=true` should be added to the Shoot. This is permitted only while the `DestinationEtcdPeersJoined` condition has status `False` with an appropriate failure reason. Once annotated, you can switch the seed name back to the source seed in the Shoot spec; the gardenlets will then orchestrate the cleanup of migration-specific resources across both the source and destination seeds. The destination gardenlet will also take care to remove the newly added members from the etcd cluster.
 
 ##### Quorum is lost at any other stage
 
@@ -252,7 +252,7 @@ If the Kube API Server (KAPI) is down because the underlying etcd has lost quoru
 
 If ETCD is healthy but the Kube API Server is unable to come up in the destination, it is likely due to the etcd cluster spanning distant regions and the Kube API Server using linearized reads. In this situation, some downtime is unavoidable, and we must prioritize recovering the Kube API Server in the destination cluster.
 
-By applying the annotation `migration.gardener.cloud/force-shrink-etcd=true`, you signal the destination gardenlet to preemptively remove the three source members before deploying the destination Kube API Server as part of the flow. With all etcd members now running in the destination seed, the Kube API Server should be able to start successfully. Consequently, the member removal step at the end of the standard flow will be treated as a no-op.
+By applying the annotation `migration.gardener.cloud/force-shrink-etcd=true`, you signal the destination gardenlet to preemptively scaleup the destination etcd to three members and remove the three source members before deploying the destination Kube API Server as part of the flow. With all etcd members now running in the destination seed, the Kube API Server should be able to start successfully. Consequently, the member removal step at the end of the standard flow will be treated as a no-op.
 
 On the source side, the presence of this annotation instructs the gardenlet to skip readiness checks for ETCD and KAPI, as these components will naturally fail once their members are removed. The system will immediately update DNS records to point to the destination KAPI. As a result, a brief period of downtime is expected.
 
