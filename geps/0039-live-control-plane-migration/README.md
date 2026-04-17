@@ -156,7 +156,7 @@ For both source and destination seeds, the following resources are created:
 
 - A single `Gateway` resource.
 - A `VirtualService` per etcd member to perform host-based routing to the respective etcd member `Service`, and a `DestinationRule` per etcd member to configure traffic policies for those connections.
-- One `DNSRecord` per etcd member, each pointing to the `Seed` Istio `IngressGateway` LoadBalancer, with traffic routed to the correct member via the corresponding `VirtualService`.
+- One `DNSRecord` per etcd member ( With domain name <etcd-pod-name>.<etcd-pod-namespace>.<seed-name>.<default-domain>), each pointing to the `Seed` Istio `IngressGateway` loadbalancer, with traffic routed to the correct member via the corresponding `VirtualService`.
 
 #### Components with Shoot webhooks and Controllers reconciling shoot objects
 
@@ -180,6 +180,8 @@ During Live CPM, etcd peer communication spans multiple Kubernetes clusters and 
 Skipping SAN verification allows peer communication to succeed during the temporary five-member cluster phase while still preserving TLS encryption.
 
 ![LiveCPM etcd](livecpm-etcd.svg)
+
+An alternative approach involves combining the `MigrateExtensionsBeforeKAPI` and `MigrateDNSRecords` steps, and the `DestinationKAPIReady` and `EtcdMigrationComplete` steps. This would require migrating the DNS record (shallow-delete) before the kube-apiserver starts on the destination. The final decision on this approach will be made during the implementation phase.
 
 #### Member removal from the cluster
 
