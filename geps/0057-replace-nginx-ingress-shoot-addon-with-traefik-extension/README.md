@@ -55,7 +55,7 @@ shoot addons (`spec.addons.nginxIngress`).  Users and platform teams have
 built ingress routing on top of this addon.  The Kubernetes
 community's November 2025 announcement of Ingress NGINX's retirement — with
 best-effort maintenance ceasing in March 2026 — creates an need for a
-supported, production-grade replacement.
+supported replacement.
 
 Key problems this GEP addresses:
 
@@ -93,8 +93,7 @@ Key problems this GEP addresses:
 4. Integrate with Gardener's standard resource-management, observability, and
    lifecycle mechanisms (`ManagedResource`, heartbeat, metrics, VPA/HPA).
 5. Enable safe, incremental rollout: restrict the extension to shoots with
-   `purpose: evaluation` in the initial release so that production workloads
-   are not disrupted while the extension matures.
+   `purpose: evaluation`.
 
 ### Non-Goals
 
@@ -159,8 +158,7 @@ The extension type identifier is **`shoot-traefik`** (referenced in
 
 * **Scope is currently restricted to `purpose: evaluation` shoots.**  This
   constraint is enforced by the admission webhook and exists to allow the
-  extension to mature in low-risk environments before being offered for
-  production shoots.
+  extension to mature in low-risk environments.
 
 ### Risks and Mitigations
 
@@ -168,7 +166,7 @@ The extension type identifier is **`shoot-traefik`** (referenced in
 |------|-----------|--------|------------|
 | Traefik annotation subset is insufficient for NGINX migration | Medium | High | The `KubernetesIngressNGINX` provider mode covers the most commonly used annotations.  [Unsupported annotations](https://doc.traefik.io/traefik-hub/api-gateway/reference/routing/kubernetes/ref-ingress-nginx#unsupported-nginx-annotations) are documented.  Users requiring full NGINX annotation support should consider a Traefik IngressRoute migration or another ingress controller. |
 | CRD conflicts if Traefik is pre-installed in the shoot | Low | High | CRDs are part of the shoot `ManagedResource` and are applied by the Gardener resource-manager using server-side apply, so pre-existing CRDs (e.g. from a user-managed Traefik installation) are updated idempotently without field-ownership conflicts. |
-| Extension limited to evaluation shoots limits production adoption | High | Medium | The evaluation-purpose restriction will be re-evaluated (and likely lifted) once the extension has been validated in evaluation clusters and a broader test matrix is in place. |
+| Extension limited to evaluation shoots | High | Medium | The evaluation-purpose restriction is intentional.  The extension is currently scoped to `purpose: evaluation` shoots only. |
 | Legacy addon and new extension run simultaneously | Low | Medium | Both the old nginx addon and the Traefik extension register separate IngressClasses (`nginx` / `traefik`), so they can coexist without routing conflicts during a migration window.  Documentation will advise against using both long-term. |
 
 
@@ -340,10 +338,9 @@ The current restriction to `purpose: evaluation` shoots is a deliberate safety
 measure adopted during the initial incubation phase of the extension.
 This allows:
 
-* Early adopters to validate the extension's behaviour in non-production
+* Early adopters to validate the extension's behaviour in evaluation
   environments.
-* The maintainer team to gather operational feedback before accepting
-  production-grade SLA expectations.
+* The maintainer team to gather operational feedback.
 
 The restriction is enforced exclusively in the admission webhook and can be
 removed or made configurable by operators without any API change.
@@ -356,7 +353,7 @@ removed or made configurable by operators without any API change.
 In the initial release, the extension's behaviour is controlled exclusively
 through `TraefikConfig` provider config fields and the admission webhook's
 hard-coded evaluation-purpose restriction.  A future iteration will expose
-selected behaviours (e.g. enabling production-shoot support or activating
+selected behaviours (e.g. activating
 experimental Gateway API integration) via
 Gardener-style feature gates on the extension manager.  This allows operators
 to opt individual seeds or environments into new or experimental functionality
