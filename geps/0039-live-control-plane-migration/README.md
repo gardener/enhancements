@@ -110,7 +110,8 @@ To trigger **Live CPM**, a new operation annotation, `gardener.cloud/operation=l
     - If operators use a different distance metric (e.g., normalized weights rather than milliseconds), they must adjust the threshold accordingly.
   - If the scheduler `ConfigMap` or the threshold annotation is not provided, Gardener cannot determine the distance between seeds. In this case, migration is only allowed if the seeds are in the same region. For seeds in different regions, operators can force a migration by annotating the Shoot with `migration.gardener.cloud/allow-distant-regions=true`, fully aware of the associated risks.
 - Both the source and destination seed clusters must be healthy and run the same gardenlet version.
-  - Before starting migration, each gardenlet reads the other gardenlet's version from the `Seed` resource and blocks until both sides report the same version. This ensures safe coordination if either gardenlet is upgraded during migration.
+  - The Gardener API Server will reject the migration if the gardenlet versions do not match.
+  - Before starting, each gardenlet reads the other's version from the `Seed` resource and blocks until both sides report the same version. This ensures safe coordination if either gardenlet is upgraded during migration.
 - Network connectivity between the source and destination seeds.
 
 ### Gardener
@@ -156,7 +157,7 @@ For both source and destination seeds, the following resources are created:
 
 - A single `Gateway` resource.
 - A `VirtualService` per etcd member to perform host-based routing to the respective etcd member `Service`, and a `DestinationRule` per etcd member to configure traffic policies for those connections.
-- One `DNSRecord` per etcd member ( With domain name <etcd-pod-name>.<etcd-pod-namespace>.<seed-name>.<default-domain>), each pointing to the `Seed` Istio `IngressGateway` loadbalancer, with traffic routed to the correct member via the corresponding `VirtualService`.
+- One `DNSRecord` per etcd member ( With domain name <etcd-pod-name>.<etcd-pod-namespace>.<seed-name>.<internal-domain>), each pointing to the `Seed` Istio `IngressGateway` loadbalancer, with traffic routed to the correct member via the corresponding `VirtualService`.
 
 #### Components with Shoot webhooks and Controllers reconciling shoot objects
 
