@@ -126,7 +126,7 @@ When enabled on a Shoot, the extension:
 2. Registers an admission webhook that validates `Shoot` objects
    enabling the extension to enforce the evaluation-purpose scope constraint
    and to validate the `TraefikConfig` provider config.
-3. Exposes a `/metrics` endpoint on the extension manager for Gardener's
+3. Exposes a `/metrics` endpoint on the extension controller for Gardener's
    monitoring stack to scrape.
 4. Participates in the Gardener heartbeat protocol to report extension health.
 
@@ -261,7 +261,7 @@ spec:
       - name: gardener-extension-shoot-traefik
 ```
 
-The extension manager is deployed per seed and watches `Extension` objects of
+The extension controller is deployed per seed and watches `Extension` objects of
 type `shoot-traefik`.
 
 ### API
@@ -330,7 +330,7 @@ The extension interacts with Gardener's lifecycle protocol as follows:
 | Delete | Deletes the `ManagedResource` and waits up to 2 minutes for all managed objects to be removed from the shoot cluster before completing. |
 | Heartbeat | Extension controller participates in the Gardener heartbeat protocol and reports liveness. |
 | Metrics | Prometheus metrics are exposed on port 8080 under `/metrics`; Gardener's monitoring stack can scrape them via `ServiceMonitor`. |
-| VPA/HPA | Optional VPA and HPA manifests for the extension manager pod are provided in the Helm chart (disabled by default). |
+| VPA/HPA | Optional VPA and HPA manifests for the extension controller pod are provided in the Helm chart (disabled by default). |
 
 ### Scope Restriction: Evaluation Shoots Only
 
@@ -355,7 +355,7 @@ through `TraefikConfig` provider config fields and the admission webhook's
 hard-coded evaluation-purpose restriction.  A future iteration will expose
 selected behaviours (e.g. activating
 experimental Gateway API integration) via
-Gardener-style feature gates on the extension manager.  This allows operators
+Gardener-style feature gates on the extension controller.  This allows operators
 to opt individual seeds or environments into new or experimental functionality
 without requiring a new extension release, and aligns with the feature-gate
 model used in Gardener core.
