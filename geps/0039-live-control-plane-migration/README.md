@@ -185,7 +185,7 @@ An alternative approach involves combining the `MigrateExtensionsBeforeKAPI` and
 
 #### Member removal from the cluster
 
-- During the five-member cluster formation, the destination etcd CR holds the bootstrap fields needed to join the source cluster. To finish the migration, one more member is added to the destination etcd CR (bringing the total to six) as mentioned before, and then the three source members are removed by clearing those bootstrap fields. Member removal is done using the [GEP-28](../0028-self-hosted-shoot-clusters/) mechanism, which calls HTTP endpoints on the backup-restore sidecar.
+- During the five-member cluster formation, the destination etcd CR holds the bootstrap fields needed to join the source cluster. To finish the migration, one more member is added to the destination etcd CR (bringing the total to six) as mentioned before, and then the three source members are removed by clearing those bootstrap fields. The destination etcd-druid then removes the members using the [GEP-28](../0028-self-hosted-shoot-clusters/) mechanism, which calls HTTP endpoints on the backup-restore sidecar.
 
 #### Decoupling Member Names from Pod Names
 
