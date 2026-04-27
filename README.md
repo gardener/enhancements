@@ -27,7 +27,7 @@ This repository **does not** host:
 - Subproject-internal design documents
 - Proposals that only affect a single Gardener subproject (e.g., MCM, etcd-druid) **and do not meet steering criteria**
 
-Subprojects are free to maintain their own project-scoped proposal or design documents as long as the topic does **not** require steering-level discussion.  
+Subprojects are free to maintain their own project-scoped proposal or design documents as long as the topic does **not** require steering-level discussion.
 If it does, it must be submitted here as a GEP and presented in the relevant steering meeting.
 
 ---
@@ -73,7 +73,7 @@ If unsure, reach out to a steering committee member for guidance.
 
 3. **Create a new proposal file**
    - Copy the template from:
-     https://github.com/gardener/enhancements/tree/master/geps/NNNN-gep-template
+     [/geps/NNNN-gep-template](/geps/NNNN-gep-template/README.md)
    - Name it descriptively, e.g.
      `<issue-number>-node-specific-etcd-certificates.md`
 
