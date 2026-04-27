@@ -36,7 +36,7 @@ GEPs are required for **non-trivial, project-wide changes**, in particular for:
 - **New features** beyond very small, incremental additions
 - **Major changes** to existing functionality
 - Topics with **cross-team or ecosystem-wide impact**
-- **New extensions** in the Gardener organizatino
+- **New extensions** in the Gardener organization
 - Changes requiring **TSC discussion**
 
 The goal is to keep the process lightweight enough that using a GEP is the **default** for significant changes.
@@ -55,7 +55,7 @@ Benefits include:
 - A durable, searchable **record of decisions and rationale**
 - Early feedback that often prevents costly redesigns later
 
-The process is inspired by established proposal systems such as IETF RFCs, Python PEPs, Rust RFCs, and Kubernetes GEPs, but adapted to Gardener's governance model.
+The process is inspired by established proposal systems such as IETF RFCs, Python PEPs, Rust RFCs, and Kubernetes KEPs, but adapted to Gardener's governance model.
 
 ---
 
