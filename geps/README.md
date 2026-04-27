@@ -92,7 +92,7 @@ You usually **do not** need a GEP for:
 - Minor, non-controversial enhancements
 - Changes scoped strictly to a single subproject that do **not** meet steering criteria
 
-When in doubt, err on the side of creating a GEP or ask a TSC member for guidance.
+If you are unsure whether your change requires a GEP, it is better to create one rather than skip it. You can also ask a TSC member for guidance.
 
 ---
 
