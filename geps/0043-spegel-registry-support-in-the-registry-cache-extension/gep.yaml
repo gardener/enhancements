@@ -1,0 +1,16 @@
+title: Spegel Registry Support in the registry-cache extension
+gep-number: 0043
+authors:
+- "@dimitar-kostadinov"
+steering: technical
+steering-link: https://gardener.cloud/community/steering/technical/0043-spegel-registry-support-in-the-registry-cache-extension
+status: implementable
+creation-date: 2026-01-23
+reviewers:
+- "@timebertt"
+- "@ScheererJ"
+- "@rfranzke"
+approvers:
+- "@timebertt"
+- "@ScheererJ"
+- "@rfranzke"
