@@ -1,23 +1,5 @@
 # GEP-0036: Self-Hosted Shoot Exposure
 
-## Table of Contents
-
-- [GEP-0036: Self-Hosted Shoot Exposure](#gep-0036-self-hosted-shoot-exposure)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [`Shoot` API Changes](#shoot-api-changes)
-    - [`SelfHostedShootExposure` Extension Resource](#selfhostedshootexposure-extension-resource)
-      - [Extension Controller Interface](#extension-controller-interface)
-      - [Examples of Possible Extension Implementations](#examples-of-possible-extension-implementations)
-    - [DNS-Based Control Plane Exposure](#dns-based-control-plane-exposure)
-    - [gardenlet Controller for Updating Control Plane Endpoints](#gardenlet-controller-for-updating-control-plane-endpoints)
-  - [Alternatives](#alternatives)
-    - [Service of Type `LoadBalancer`](#service-of-type-loadbalancer)
-
 ## Summary
 
 This proposal introduces a standardized mechanism for exposing the API server of self-hosted shoot clusters with managed infrastructure (see [GEP-28](../0028-self-hosted-shoot-clusters/README.md#managed-infrastructure)), e.g., using a load balancer of the underlying infrastructure provider or other strategies.

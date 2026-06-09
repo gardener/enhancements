@@ -1,42 +1,5 @@
 # GEP-0031: In-Place Node Updates of Shoot Clusters
 
-## Table of Contents
-
-- [GEP-0031: In-Place Node Updates of Shoot Clusters](#gep-0031-in-place-node-updates-of-shoot-clusters)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Approach](#approach)
-    - [Prerequisites](#prerequisites)
-    - [Update Strategies](#update-strategies)
-      - [`AutoInPlaceUpdate` strategy](#autoinplaceupdate-strategy)
-      - [`ManualInPlaceUpdate` strategy](#manualinplaceupdate-strategy)
-    - [Gardener](#gardener)
-      - [`CloudProfile` API](#cloudprofile-api)
-      - [`Shoot` API](#shoot-api)
-      - [`Worker` API](#worker-api)
-      - [`OperatingSystemConfig` API](#operatingsystemconfig-api)
-      - [Gardener Node Agent](#gardener-node-agent)
-    - [Machine Controller Manager](#machine-controller-manager)
-      - [`MachineDeployment` API](#machinedeployment-api)
-    - [Dependency Watchdog](#dependency-watchdog)
-    - [Extensions](#extensions)
-      - [OS extensions](#os-extensions)
-    - [Worker pool hash calculations](#worker-pool-hash-calculations)
-    - [Failures and Recovery Strategy](#failures-and-recovery-strategy)
-      - [Types of Failures During Update](#types-of-failures-during-update)
-        - [Drain Timeout/Failure](#drain-timeoutfailure)
-        - [Kubernetes Update Failures](#kubernetes-update-failures)
-        - [OS Update Failures](#os-update-failures)
-      - [Roles in Failure Handling](#roles-in-failure-handling)
-  - [Future Work](#future-work)
-  - [Alternatives](#alternatives)
-    - [Using Only Gardener Node Agent](#using-only-gardener-node-agent)
-    - [Using the same name for `MachineClass`](#using-the-same-name-for-machineclass)
-
 ## Summary
 
 Gardener should support new update strategies for nodes that do not require the deletion and recreation of the nodes. These strategies aim to minimize the overhead traditionally associated with node replacement and offer an alternative approach to updates, which is particularly important for physical machines or bare-metal nodes.

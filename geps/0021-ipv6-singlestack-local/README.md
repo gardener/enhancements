@@ -1,31 +1,5 @@
 # GEP-0021: IPv6 Single-Stack Support in Local Gardener
 
-## Table of Contents
-
-<!-- TOC -->
-- [GEP-0021: IPv6 Single-Stack Support in Local Gardener](#gep-0021-ipv6-single-stack-support-in-local-gardener)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [`Shoot` API](#shoot-api)
-      - [Future Dual-Stack Enhancements](#future-dual-stack-enhancements)
-    - [`Seed` API](#seed-api)
-    - [`Network` API](#network-api)
-    - [`DNSRecord` API](#dnsrecord-api)
-    - [Implementation Overview](#implementation-overview)
-      - [Preparing the Local Setup](#preparing-the-local-setup)
-      - [DNS Records](#dns-records)
-      - [Network Policies](#network-policies)
-      - [Shoot Worker Node Kernel Configuration](#shoot-worker-node-kernel-configuration)
-      - [Docker Hub Images](#docker-hub-images)
-      - [E2E Tests](#e2e-tests)
-      - [Networking Extensions](#networking-extensions)
-  - [Alternatives Considered](#alternatives-considered)
-<!-- TOC -->
-
 ## Summary
 
 Today, all shoot clusters provisioned by Gardener use IPv4 single-stack networking.

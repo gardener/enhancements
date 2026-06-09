@@ -1,28 +1,5 @@
 # GEP-0019: Observability Stack - Migrating to the prometheus-operator and fluent-bit-operator
 
-## Table of Contents
-
-- [GEP-0019: Observability Stack - Migrating to the prometheus-operator and fluent-bit-operator](#gep-0019-observability-stack---migrating-to-the-prometheus-operator-and-fluent-bit-operator)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [API](#api)
-    - [Prometheus Operator CRDs](#prometheus-operator-crds)
-    - [Shoot Monitoring](#shoot-monitoring)
-    - [Seed Monitoring](#seed-monitoring)
-    - [BYOMC (Bring your own monitoring configuration)](#byomc-bring-your-own-monitoring-configuration)
-    - [Grafana Sidecar](#grafana-sidecar)
-    - [Fluent-bit Operator CRDs](#fluent-bit-operator-crds)
-    - [Fluent-bit Filters and Parsers](#fluent-bit-filters-and-parsers)
-    - [BYOLC (Bring Your Own Logging Configuration)](#byolc-bring-your-own-logging-configuration)
-    - [Migration](#migration)
-      - [Prometheus Operator](#prometheus-operator)
-      - [Fluent-bit Operator](#fluent-bit-operator)
-  - [Alternatives](#alternatives)
-
 > **Note:** FluentBit Operator is now known as Fluent Operator. The proposal has been left unchanged.
 
 ## Summary

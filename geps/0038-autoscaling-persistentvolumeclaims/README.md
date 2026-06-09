@@ -1,63 +1,5 @@
 # GEP-0038: Autoscaling PersistentVolumeClaims
 
-## Table of Contents
-
-- [GEP-0038: Autoscaling PersistentVolumeClaims](#gep-0038-autoscaling-persistentvolumeclaims)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Problem Statement](#problem-statement)
-    - [Why this matters](#why-this-matters)
-    - [Who Benefits](#who-benefits)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Core Concept](#core-concept)
-    - [Example API Design](#example-api-design)
-    - [Key Features](#key-features)
-      - [Automatic PVC Discovery](#automatic-pvc-discovery)
-      - [Volume-Specific Policies](#volume-specific-policies)
-      - [Observability and Monitoring](#observability-and-monitoring)
-    - [Scaling Algorithm](#scaling-algorithm)
-      - [Scale-Up Decision Logic](#scale-up-decision-logic)
-      - [Handling Scale-Up Failures](#handling-scale-up-failures)
-      - [Why Downscaling is a Non-Goal](#why-downscaling-is-a-non-goal)
-      - [PVC Admission Webhook Considerations](#pvc-admission-webhook-considerations)
-    - [Architecture Overview](#architecture-overview)
-    - [Gardener Integration](#gardener-integration)
-      - [Integration Into Seed Clusters](#integration-into-seed-clusters)
-      - [Integration Into Gardener Runtime Clusters](#integration-into-gardener-runtime-clusters)
-      - [Support for Shoot Clusters](#support-for-shoot-clusters)
-  - [Impact and Alternatives](#impact-and-alternatives)
-    - [Risks, Downsides and Trade-offs](#risks-downsides-and-trade-offs)
-      - [Metrics used for volume stats are still ALPHA](#metrics-used-for-volume-stats-are-still-alpha)
-      - [Metrics Sources](#metrics-sources)
-      - [Latency](#latency)
-      - [Cloud Provider Limitations](#cloud-provider-limitations)
-      - [Dependency on `csi-resizer`](#dependency-on-csi-resizer)
-    - [Scaling Algorithm and API Alternatives](#scaling-algorithm-and-api-alternatives)
-      - [VPA's Historical Approach](#vpas-historical-approach)
-      - [Trend-Based Algorithm](#trend-based-algorithm)
-      - [Gliding Average Algorithm](#gliding-average-algorithm)
-      - [Gliding Maximum Algorithm](#gliding-maximum-algorithm)
-    - [Alternative 3rd Party PVC Autoscalers](#alternative-3rd-party-pvc-autoscalers)
-      - [Alternative: topolvm/pvc-autoscaler](#alternative-topolvmpvc-autoscaler)
-      - [Alternative: lorenzophys/pvc-autoscaler](#alternative-lorenzophyspvc-autoscaler)
-      - [Alternative: DevOps-Nirvana/Kubernetes-Volume-Autoscaler](#alternative-devops-nirvanakubernetes-volume-autoscaler)
-  - [Decision Request](#decision-request)
-    - [Proposed Implementation Timeline](#proposed-implementation-timeline)
-      - [Phase 1 (Core Implementation)](#phase-1-core-implementation)
-      - [Phase 2 (Gardener Integration)](#phase-2-gardener-integration)
-      - [Phase 3 (Future Enhancement)](#phase-3-future-enhancement)
-      - [Phase 4 (If required by stakeholders)](#phase-4-if-required-by-stakeholders)
-    - [Next Steps](#next-steps)
-  - [Appendix](#appendix)
-    - [How PVCs are managed by workload controllers](#how-pvcs-are-managed-by-workload-controllers)
-      - [StatefulSets](#statefulsets)
-      - [Prometheus](#prometheus)
-      - [VLSingle](#vlsingle)
-    - [Supporting materials (linked or embedded)](#supporting-materials-linked-or-embedded)
-
 ## Summary
 
 Gardener currently uses a one-size-fits-all strategy for the volumes of its observability workloads which can be problematic due to both over-provisioning (generating extra costs) and under-provisioning (missing observability signals).
@@ -253,8 +195,6 @@ When the Pod starts and re-mounts the volume, the file system is automatically r
 
 The current plan is to implement these steps as part of a separate controller in the `pvc-autoscaler` which will be responsible for evicting affected Pods and removing the scheduling gate once they are ready to be scheduled.
 The webhook, which adds scheduling gates to Pods, will run inside the `pvc-autoscaler` so that all of the aspects are handled by one component.
-
-
 
 **Insufficient cloud provider resources:**
 When a resize fails due to lack of resources on the cloud provider side, the `pvc-autoscaler` can leverage the [Recovery From Volume Expansion Failure][10] feature available in Kubernetes 1.34+.

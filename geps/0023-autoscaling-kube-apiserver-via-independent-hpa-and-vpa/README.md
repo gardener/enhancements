@@ -6,31 +6,6 @@ The GEP is replaced by an autoscaling solution for Kubernetes API server based o
 
 ---
 
-## Table of Contents
-- [GEP-0023: Autoscaling Shoot kube-apiserver via Independently Driven HPA and VPA](#gep-0023-autoscaling-shoot-kube-apiserver-via-independently-driven-hpa-and-vpa)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Existing Solution](#existing-solution)
-    - [Deficiencies of the Existing Solution](#deficiencies-of-the-existing-solution)
-    - [Other Benefits to Replacing the Existing Solution](#other-benefits-to-replacing-the-existing-solution)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Rationale](#rationale)
-    - [Design Outline](#design-outline)
-    - [Element: Gardener Custom Metrics Provider Component](#element-gardener-custom-metrics-provider-component)
-      - [High availability operation](#high-availability-operation)
-    - [Element: New Custom Pod Metric for ShootKapis](#element-new-custom-pod-metric-for-shootkapis)
-    - [Element: HPA](#element-hpa)
-    - [Element: VPA](#element-vpa)
-    - [Transition Strategy](#transition-strategy)
-  - [Discussion and Limitations](#discussion-and-limitations)
-      - [Gardener-custom metrics precludes the use of other sources of custom metrics](#gardener-custom-metrics-precludes-the-use-of-other-sources-of-custom-metrics)
-      - [Observed fluctuations in actual compute efficiency affecting ShootKapi workloads](#observed-fluctuations-in-actual-compute-efficiency-affecting-shootkapi-workloads)
-  - [Alternatives](#alternatives)
-  - [References](#references)
-
 ## Summary
 When it comes to autoscaling shoot control plane `kube-apiserver` instances (ShootKapi hereafter), Gardener needs
 both stability and efficiency (accurate scaling). The existing approach of fusing HPA and VPA into the 2-dimensional

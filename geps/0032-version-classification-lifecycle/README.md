@@ -1,21 +1,5 @@
 # GEP-0032: Cloud Profile Version Classification Lifecycles
 
-## Table of Contents
-
-- [GEP-0032: Cloud Profile Version Classification Lifecycles](#gep-0032-cloud-profile-version-classification-lifecycles)
-  - [Table of Contents](#table-of-contents)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Backwards Compatibility](#backwards-compatibility)
-    - [Compatibility with Namespaced Cloud Profiles](#compatibility-with-namespaced-cloud-profiles)
-  - [Considered Alternatives](#considered-alternatives)
-    - [Consequent Continuation of Current Approach](#consequent-continuation-of-current-approach)
-    - [Introduction of a Lifecycle Map](#introduction-of-a-lifecycle-map)
-    - [Status vs. Classification Field Patching](#status-vs-classification-field-patching)
-    - [Implementation Without the Status Field](#implementation-without-the-status-field)
-
 ## Motivation
 
 At the current stage of implementation, Gardener administrators may classify Kubernetes versions and machine image versions using the `CloudProfile` spec.
@@ -174,7 +158,6 @@ Of course the new version classification lifecycles must be compatible with `Nam
 
 In the previous implementation a version's `classification` could not be changed, while changing the `expirationDate` is allowed. We try to retain this intention.
 Hence changing the `startTime` of a stage is possible, but introducing new lifecycle stages isn't.
-
 
 Given the `CloudProfile` from above, the following `NamespacedCloudProfile` is valid:
 

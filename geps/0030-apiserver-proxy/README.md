@@ -1,22 +1,5 @@
 # GEP-0030: Rework API Server Proxy to Drop Proxy Protocol
 
-## Table of Contents
-
-- [GEP-0030: Rework API Server Proxy to Drop Proxy Protocol](#gep-0030-rework-api-server-proxy-to-drop-proxy-protocol)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Reconfiguring the API Server Proxy](#reconfiguring-the-api-server-proxy)
-    - [Reconfiguring the Istio Ingress Gateway](#reconfiguring-the-istio-ingress-gateway)
-    - [Unifying the HTTP Proxy Infrastructure](#unifying-the-http-proxy-infrastructure)
-    - [Rollout Plan](#rollout-plan)
-  - [Alternatives](#alternatives)
-  - [Appendix](#appendix)
-    - [Visualization of the Architecture](#visualization-of-the-architecture)
-
 ## Summary
 [](../0008-shoot-apiserver-via-sni/README.md)
 This proposal reworks the API server proxy (originally introduced in [GEP-08](../0008-shoot-apiserver-via-sni/README.md)) to use [HTTP CONNECT requests](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3.6) (i.e., HTTP proxy) instead of the [proxy protocol](https://www.haproxy.org/download/3.2/doc/proxy-protocol.txt) for connecting in-cluster clients on the shoot side to the corresponding API server on the seed side.

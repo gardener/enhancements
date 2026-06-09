@@ -1,19 +1,5 @@
 # GEP-0024: Shoot OIDC Issuer
 
-## Table of Contents
-
-- [GEP-0024: Shoot OIDC Issuer](#gep-0024-shoot-oidc-issuer)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Static validation](#static-validation)
-    - [Gardenlet](#gardenlet)
-    - [Metadata Server](#metadata-server)
-  - [Clarifications](#clarifications)
-
 ## Summary
 
 Kubernetes clusters can act as an OIDC compatible provider in a sense that they serve OIDC discovery documents. These documents if publicly accessible can be used by other systems to establish trust to such clusters by fetching the public key part of the key that is used to sign service account tokens. The public keys can be then used by external systems to verify that a service account token is issued by a particular cluster and then grant access to the bearer of that token.

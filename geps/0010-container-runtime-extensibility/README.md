@@ -1,15 +1,5 @@
 # GEP-0010: Gardener Extensibility to Support Shoot Additional Container Runtimes
 
-## Table of Contents
-
-- [GEP-0010: Gardener Extensibility to Support Shoot Additional Container Runtimes](#gep-0010-gardener-extensibility-to-support-shoot-additional-container-runtimes)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-  - [Proposal](#proposal)
-  - [Design Details](#design-details)
-
 ## Summary
 
 Gardener-managed Kubernetes clusters are sometimes used to run sensitive workloads, which sometimes are comprised of OCI images originating from untrusted sources. Additional use-cases want to leverage economy-of-scale to run workloads for multiple tenants on the same cluster.  In some cases, Gardener users want to use operating systems which do not easily support the Docker engine.

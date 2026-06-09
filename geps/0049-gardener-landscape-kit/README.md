@@ -1,25 +1,5 @@
 # GEP-0049: Gardener Landscape Kit
 
-## Table of Contents
-
-- [GEP-0049: Gardener Landscape Kit](#gep-0049-gardener-landscape-kit)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Notes/Constraints/Caveats (Optional)](#notesconstraintscaveats-optional)
-    - [Risks and Mitigations](#risks-and-mitigations)
-  - [Design Details](#design-details)
-    - [Repositories](#repositories)
-    - [Components](#components)
-    - [Versions and OCI References](#versions-and-oci-references)
-    - [Configuration API](#configuration-api)
-  - [Drawbacks](#drawbacks)
-  - [Alternatives](#alternatives)
-  - [Appendix](#appendix)
-
 ## Summary
 
 The Gardener Landscape Kit (GLK, or `gardener-landscape-kit`) aims to deliver tools and best practices for managing Gardener, from small-size to large-scale landscapes.

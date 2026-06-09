@@ -1,15 +1,5 @@
 # GEP-0018: Automated Shoot CA Rotation
 
-## Table of Contents
-
-- [Summary](#summary)
-- [Motivation](#motivation)
-  - [Goals](#goals)
-  - [Non-Goals](#non-goals)
-- [Proposal](#proposal)
-- [Alternatives](#alternatives)
-- [Open Questions](#open-questions)
-
 ## Summary
 
 This proposal outlines an on-demand, multi-step approach to rotate all certificate authorities (CA) used in a Shoot cluster. This process includes creating new CAs, invalidating the old ones and recreating all certificates signed by the CAs.
@@ -215,7 +205,6 @@ This section presents a different approach to rotate the CAs, which is to _tempo
 - Drop first `DNSRecord`, `Service`, Istio configuration and first `kube-apiserver` deployment
 - Drop `CA0`
 - _Ask the user to optionally restart their `Pod`s since they still contain `CA0` in memory._
-
 
 #### Advantages/Disadvantages Approach Two API Servers
 

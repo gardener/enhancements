@@ -1,24 +1,5 @@
 # GEP-0004: New `core.gardener.cloud/v1beta1` APIs Required to Extract Cloud-Specific/OS-Specific Knowledge Out of Gardener Core
 
-## Table of Contents
-
-- [GEP-0004: New `core.gardener.cloud/v1beta1` APIs Required to Extract Cloud-Specific/OS-Specific Knowledge Out of Gardener Core](#gep-0004-new-coregardenercloudv1beta1-apis-required-to-extract-cloud-specificos-specific-knowledge-out-of-gardener-core)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [`CloudProfile` Resource](#cloudprofile-resource)
-    - [`Seed` Resource](#seed-resource)
-    - [`Project` Resource](#project-resource)
-    - [`SecretBinding` resource](#secretbinding-resource)
-    - [`Quota` Resource](#quota-resource)
-    - [`BackupBucket` Resource](#backupbucket-resource)
-    - [`BackupEntry` Resource](#backupentry-resource)
-    - [`Shoot` Resource](#shoot-resource)
-    - [`Plant` resource](#plant-resource)
-
 ## Summary
 
 In [GEP-1](../0001-gardener-extensibility/README.md) we have proposed how to (re-)design Gardener to allow providers maintaining their provider-specific knowledge out of the core tree.

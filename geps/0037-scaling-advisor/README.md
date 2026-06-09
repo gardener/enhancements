@@ -1,31 +1,5 @@
 # GEP-0037: Scaling Advisor
 
-## Table of Contents
-
-- [GEP-0037: Scaling Advisor](#gep-0037-scaling-advisor)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Issues \& Challenges](#issues--challenges)
-      - [Multiple Overlapping Actors:](#multiple-overlapping-actors)
-      - [CA inherent design flaws](#ca-inherent-design-flaws)
-        - [Impedence mismatch between CA and kube-scheduler](#impedence-mismatch-between-ca-and-kube-scheduler)
-        - [Inefficient scaling of NodeGroup(s)](#inefficient-scaling-of-nodegroups)
-      - [Scalability challenges](#scalability-challenges)
-      - [Maintenance challenges](#maintenance-challenges)
-        - [Diagnostic challenges](#diagnostic-challenges)
-  - [Way forward](#way-forward)
-    - [Alternatives evaluated](#alternatives-evaluated)
-    - [How we addressed CA challenges?](#how-we-addressed-ca-challenges)
-      - [Single actor responsibility](#single-actor-responsibility)
-      - [Alleviating CA inherent design flaws](#alleviating-ca-inherent-design-flaws)
-      - [Scalability](#scalability)
-    - [Proof of concept validation](#proof-of-concept-validation)
-    - [Envisaged value differentiators](#envisaged-value-differentiators)
-    - [Risk Mitigation](#risk-mitigation)
-    - [Non Goal](#non-goal)
-  - [Appendix](#appendix)
-
 ## Summary
 
 Gardener uses a [fork](https://github.com/gardener/autoscaler/tree/machine-controller-manager-provider/cluster-autoscaler) of upstream [Cluster-Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler) (a.k.a. CA) to scale out/in Shoot clusters and it uses [machine-controller-manager](https://github.com/gardener/machine-controller-manager) (a.k.a. MCM) to manage the lifecycle of machines. In the CA fork, we have an in-tree implementation of [CloudProvider](https://github.com/gardener/autoscaler/blob/45e190f4bd7890e0029bef8eb9affa0946f135d5/cluster-autoscaler/cloudprovider/cloud_provider.go#L106) interface for [MCM](https://github.com/gardener/autoscaler/blob/45e190f4bd7890e0029bef8eb9affa0946f135d5/cluster-autoscaler/cloudprovider/mcm/mcm_cloud_provider.go#L69). Over several years of using these components together, we have encountered numerous challenges and shortcomings when working with CA.
@@ -97,12 +71,10 @@ Gardener provides capabilities to scale-in and scale-out a kubernetes cluster vi
   * To minimise the 2-actor problems between CA and MCM, core CA code has been adapted/changed/commented. With every rebase care needs to be taken to ensure that modified code continues to work.
   * The overall size of the CA repository is over 200Mb which includes the code from multiple cloud provider implementations that is not consumed in Gardener. As a consequence local setup and development is resource heavy and slow.
 
-
 ##### Diagnostic challenges
 
 * Pod triggered scaled up events emitted by the CA are inaccurate since all the pods that were involved in the scale-out evaluation were logged as part of this triggered-scale-up-event. This set of pods is not neccessarily the set of pods that caused the actual scale up. This makes diagnostics trickier and developers needs to be trained to ignore these logs and only look at the final scale-out plan.
 * CA does not emit logs at the right log-level for critical failure in scaling-out NodeGroups. This forces the operators to change the log level to DEBUG to get this information which in turn results in an overload of logs.
-
 
 ## Way forward
 
@@ -121,7 +93,6 @@ Currently there are only [two cluster autoscaling implementations](https://kuber
 A proof-of-concept [Scaling Advisor](https://github.tools.sap/kubernetes/gardener-scaling-recommender) was envisaged which has single responsibility to provide scaling advice by leveraging the kubernetes kube-scheduler on the current cluster state.
 
 ![Scaling Advisor POC Flow](./poc-flow.png)
-
 
 #### Single actor responsibility
 
@@ -168,7 +139,6 @@ Anectodally we observed that scaling advisor POC was faster than CA in computing
 
 * scaling-advisor is independent of the Cluster API. Any VM lifecycle management component can leverage this as a library.
 * scaling-advisor will not revise the Gardener worker pool concept.
-
 
 ## Appendix
 

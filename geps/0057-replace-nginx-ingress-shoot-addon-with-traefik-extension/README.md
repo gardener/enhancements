@@ -1,35 +1,5 @@
 # GEP-57: Replace Nginx Ingress Shoot Addon with Traefik Extension
 
-## Table of Contents
-
-- [GEP-57: Replace Nginx Ingress Shoot Addon with Traefik Extension](#gep-57-replace-nginx-ingress-shoot-addon-with-traefik-extension)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Notes/Constraints/Caveats](#notesconstraintscaveats)
-    - [Risks and Mitigations](#risks-and-mitigations)
-  - [Design Details](#design-details)
-    - [Extension Registration](#extension-registration)
-    - [API](#api)
-    - [Ingress Provider Modes](#ingress-provider-modes)
-    - [Admission Webhook](#admission-webhook)
-    - [Lifecycle Management](#lifecycle-management)
-    - [Scope Restriction: Evaluation Shoots Only](#scope-restriction-evaluation-shoots-only)
-  - [Future Enhancements](#future-enhancements)
-    - [Feature Gate Configuration](#feature-gate-configuration)
-    - [Traefik Version Handling](#traefik-version-handling)
-  - [Drawbacks](#drawbacks)
-  - [Alternatives](#alternatives)
-    - [1. Continue Shipping Ingress NGINX](#1-continue-shipping-ingress-nginx)
-    - [2. Use a Cloud-Provider-Specific Ingress Controller](#2-use-a-cloud-provider-specific-ingress-controller)
-    - [3. Adopt Kubernetes Gateway API Exclusively](#3-adopt-kubernetes-gateway-api-exclusively)
-    - [4. Ingress NGINX Fork / Community Takeover](#4-ingress-nginx-fork--community-takeover)
-    - [5. Different Ingress Controller (e.g. Contour, Emissary, HAProxy Ingress)](#5-different-ingress-controller-eg-contour-emissary-haproxy-ingress)
-
-
 ## Summary
 
 [Ingress NGINX](https://github.com/kubernetes/ingress-nginx/) — the standard
@@ -46,7 +16,6 @@ shoot clusters.  The extension follows the standard Gardener extension
 contract (controller registration, `ManagedResource`-based deployment,
 admission webhooks) and provides a migration-friendly path for workloads that
 previously relied on NGINX-specific `Ingress` annotations.
-
 
 ## Motivation
 
@@ -110,7 +79,6 @@ Key problems this GEP addresses:
    policies, or advanced traffic shaping beyond what Traefik exposes out
    of the box through its standard Kubernetes Ingress and IngressRoute CRDs.
 
-
 ## Proposal
 
 Introduce `gardener-extension-shoot-traefik` as a new extension in the
@@ -168,7 +136,6 @@ The extension type identifier is **`shoot-traefik`** (referenced in
 | CRD conflicts if Traefik is pre-installed in the shoot | Low | High | CRDs are part of the shoot `ManagedResource` and are applied by the Gardener resource-manager using server-side apply, so pre-existing CRDs (e.g. from a user-managed Traefik installation) are updated idempotently without field-ownership conflicts. |
 | Extension limited to evaluation shoots | High | Medium | The evaluation-purpose restriction is intentional.  The extension is currently scoped to `purpose: evaluation` shoots only. |
 | Legacy addon and new extension run simultaneously | Low | Medium | Both the old nginx addon and the Traefik extension register separate IngressClasses (`nginx` / `traefik`), so they can coexist without routing conflicts during a migration window.  Documentation will advise against using both long-term. |
-
 
 ## Design Details
 
@@ -345,7 +312,6 @@ This allows:
 The restriction is enforced exclusively in the admission webhook and can be
 removed or made configurable by operators without any API change.
 
-
 ## Future Enhancements
 
 ### Feature Gate Configuration
@@ -372,7 +338,6 @@ lifecycle classifications (aligned with
 [GEP-32](../0032-version-classification-lifecycle/README.md)) and letting
 shoot owners pin a specific version.
 
-
 ## Drawbacks
 
 * **Incomplete annotation parity with NGINX**: The `KubernetesIngressNGINX`
@@ -384,7 +349,6 @@ shoot owners pin a specific version.
 * **Traefik CRD proliferation**: Even users who only use standard Kubernetes
   `Ingress` objects will have Traefik-specific CRDs installed in their shoot.
   This adds a small amount of API surface that may be unexpected.
-
 
 ## Alternatives
 

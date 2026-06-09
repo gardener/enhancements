@@ -1,47 +1,5 @@
 # GEP-0028: Self-Hosted Shoot Clusters
 
-## Table of Contents
-
-- [GEP-0028: Self-Hosted Shoot Clusters](#gep-0028-self-hosted-shoot-clusters)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Prerequisites](#prerequisites)
-    - [Commands](#commands)
-      - [`gardenadm discover`](#gardenadm-discover)
-      - [`gardenadm init`](#gardenadm-init)
-        - [Problems \& Solutions](#problems--solutions)
-          - [Faking a Kubernetes API](#faking-a-kubernetes-api)
-          - [Host Network vs. Pod Network](#host-network-vs-pod-network)
-          - [Dealing with Webhooks for Control Plane Components](#dealing-with-webhooks-for-control-plane-components)
-          - [`etcd` Management via `etcd-druid`](#etcd-management-via-etcd-druid)
-      - [`gardenadm token`](#gardenadm-token)
-      - [`gardenadm join`](#gardenadm-join)
-      - [`gardenadm connect`](#gardenadm-connect)
-      - [`gardenadm version`](#gardenadm-version)
-    - [`Shoot` API](#shoot-api)
-    - [Scenarios](#scenarios)
-      - [Unmanaged Infrastructure](#unmanaged-infrastructure)
-      - [Managed Infrastructure](#managed-infrastructure)
-        - [`gardenadm bootstrap`](#gardenadm-bootstrap)
-    - [Disaster Recovery](#disaster-recovery)
-      - [Single-Node Failure](#single-node-failure)
-      - [Multi-Node Failure](#multi-node-failure)
-      - [Data Center Failure](#data-center-failure)
-  - [Future Work](#future-work)
-    - [Self-Hosted Shoot Clusters for End-Users](#self-hosted-shoot-clusters-for-end-users)
-    - [Network Connectivity to Garden Cluster](#network-connectivity-to-garden-cluster)
-    - [Changes to Shoot Components](#changes-to-shoot-components)
-    - [Air-Gapped Gardener Landscapes](#air-gapped-gardener-landscapes)
-    - [Scaling the Control Plane of Self-Hosted Shoot Clusters](#scaling-the-control-plane-of-self-hosted-shoot-clusters)
-  - [Alternatives](#alternatives)
-    - [Using Existing Tools](#using-existing-tools)
-    - [Using Existing Services](#using-existing-services)
-    - [Using Existing Gardener](#using-existing-gardener)
-
 ## Summary
 
 Gardener ships with functionality that would allow the creation of "self-hosted" shoot clusters.

@@ -1,15 +1,5 @@
 # GEP-0035: Migrating from Vali to VictoriaLogs
 
-## Table of Contents
-
-- [Terminology](#terminology)
-- [Summary](#summary)
-- [Motivation](#motivation)
-  - [Goals](#goals)
-  - [Non-Goals](#non-goals)
-- [Proposal](#proposal)
-- [Alternatives](#alternatives)
-
 ## Terminology
 
 Since this document relies on work that has already been done in [GEP-34](../0034-observability2.0-opentelemetry/README.md), the same terminology applies here as well:

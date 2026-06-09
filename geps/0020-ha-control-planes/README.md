@@ -1,66 +1,5 @@
 # GEP-0020: Highly Available Shoot Control Planes
 
-## Table of Contents
-
-- [GEP-0020: Highly Available Shoot Control Planes](#gep-0020-highly-available-shoot-control-planes)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-  - [Goals](#goals)
-  - [Non-Goals](#non-goals)
-  - [High Availability](#high-availability)
-    - [Topologies](#topologies)
-    - [Recommended Number of Nodes and Zones](#recommended-number-of-nodes-and-zones)
-    - [Recommended Number of Replicas](#recommended-number-of-replicas)
-  - [Gardener Shoot API](#gardener-shoot-api)
-    - [Proposed Changes](#proposed-changes)
-  - [Gardener Scheduler](#gardener-scheduler)
-    - [Case #1: HA Shoot with no Seed Assigned](#case-1-ha-shoot-with-no-seed-assigned)
-    - [Case #2: HA Shoot with Assigned Seed and Updated Failure Tolerance](#case-2-ha-shoot-with-assigned-seed-and-updated-failure-tolerance)
-  - [Setting Up a Seed for HA](#setting-up-a-seed-for-ha)
-    - [Hosting an HA Shoot Control Plane with `node` Failure Tolerance](#hosting-an-ha-shoot-control-plane-with-node-failure-tolerance)
-    - [Hosting an HA Shoot Control Plane with `zone` Failure Tolerance](#hosting-an-ha-shoot-control-plane-with-zone-failure-tolerance)
-    - [Compute Seed Usage](#compute-seed-usage)
-  - [Scheduling Control Plane Components](#scheduling-control-plane-components)
-    - [Zone Pinning](#zone-pinning)
-    - [Single-Zone](#single-zone)
-    - [Multi-Zone (#replicas \<= #zones)](#multi-zone-replicas--zones)
-    - [Multi-Zone (#replicas \> #zones)](#multi-zone-replicas--zones-1)
-  - [Disruptions and Zero Downtime Maintenance](#disruptions-and-zero-downtime-maintenance)
-  - [Seed System Components](#seed-system-components)
-  - [Shoot Control Plane Components](#shoot-control-plane-components)
-    - [Kube Apiserver](#kube-apiserver)
-    - [Gardener Resource Manager](#gardener-resource-manager)
-    - [etcd](#etcd)
-      - [Gardener `etcd` Component Changes](#gardener-etcd-component-changes)
-    - [Other Critical Components Having a Single Replica](#other-critical-components-having-a-single-replica)
-  - [Handling Outages](#handling-outages)
-    - [Node Failures](#node-failures)
-      - [Impact of Node Failure](#impact-of-node-failure)
-    - [What is Zone Outage?](#what-is-zone-outage)
-      - [Impact of a Zone Outage](#impact-of-a-zone-outage)
-    - [Identify a Zone Outage](#identify-a-zone-outage)
-    - [Identify Zone Recovery](#identify-zone-recovery)
-    - [Recovery](#recovery)
-      - [Current Recovery Mechanisms](#current-recovery-mechanisms)
-      - [Recovery from Node Failure](#recovery-from-node-failure)
-      - [Recovery from Zone Failure](#recovery-from-zone-failure)
-    - [Option #1: Leverage Existing Recovery Options - `Preferred`](#option-1-leverage-existing-recovery-options---preferred)
-    - [Option #2: Redundancies for All Critical Control Plane Components](#option-2-redundancies-for-all-critical-control-plane-components)
-    - [Option #3: Auto-Rebalance Pods in the Event of an AZ Failure](#option-3-auto-rebalance-pods-in-the-event-of-an-az-failure)
-  - [Cost Implications on Hosting an HA Control Plane](#cost-implications-on-hosting-an-ha-control-plane)
-    - [Compute \& Storage](#compute--storage)
-    - [Network Latency](#network-latency)
-    - [Cross-Zonal Traffic](#cross-zonal-traffic)
-      - [Ingress/Egress Traffic Analysis](#ingressegress-traffic-analysis)
-      - [Optimizing Cost: Topology Aware Hint](#optimizing-cost-topology-aware-hint)
-  - [References](#references)
-  - [Appendix](#appendix)
-    - [etcd Active-Passive Options](#etcd-active-passive-options)
-    - [Topology Spread Constraints Evaluation and Findings](#topology-spread-constraints-evaluation-and-findings)
-    - [Availability Zone Outage Simulation](#availability-zone-outage-simulation)
-    - [Ingress/Egress Traffic Analysis Details](#ingressegress-traffic-analysis-details)
-
 ## Summary
 
 Gardener today only offers highly available control planes for some of its components (like Kubernetes API Server and Gardener Resource Manager) which are deployed with multiple replicas and allow a distribution across nodes. Many of the other critical control plane components including `etcd` are only offered with a single replica, making them susceptible to both node failure as well as zone failure causing downtimes.
@@ -367,7 +306,6 @@ The following shoot control plane components are currently setup with a single r
 
 Additionally [Affinity and anti-affinity](#scheduling-control-plane-components) rules must be configured.
 
-
 ## Handling Outages
 
 ### Node Failures
@@ -638,7 +576,6 @@ Network latency measurements were done focusing on `etcd`. Three different etcd 
   * The `mn-sz` latency is lesser (range of 20-30%) as compared to `mn-mz` when the request is serviced by a follower. However, the difference is usually within the same millisecond.
   * When the number of clients and connections are kept at 1, then irrespective of the payload size it is observed that the latency of the leader is lesser than that of any follower. This is on the expected lines. However, if the number of clients and connections are increased, then the leader seems to have a higher latency as compared to a follower, which could not be explained.
 
-
 **Test findings for GET (Range) requests**
 
 Using an etcd benchmark tool, range requests were generated.
@@ -840,7 +777,6 @@ When the constraints defined above were applied, the following findings were mad
 </details>
 
 > **Note:** Also see the [Known Limitations](https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/#known-limitations) topic.
-
 
 ### Availability Zone Outage Simulation
 
@@ -1238,7 +1174,6 @@ benchmark put --target-leader  --rate 500 --conns=400 --clients=800 --sequential
     --cert=/var/etcd/ssl/client/client/tls.crt
 ```
 <img src="watch-request-targeting-follower.png"/>
-
 
 _Observations:_
 * etcd intra cluster network traffic remains the same, observed that there is no change in the network traffic pattern.

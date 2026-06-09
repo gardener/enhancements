@@ -1,11 +1,5 @@
 # GEP-0014: Reversed Cluster VPN
 
-## Table of Contents
-
-* [Motivation](#Motivation)
-* [Proposal](#Proposal)
-* [Alternatives](#Alternatives)
-
 ## Motivation
 
 It is necessary to describe the current VPN solution and outline its shortcomings in order to motivate this proposal.

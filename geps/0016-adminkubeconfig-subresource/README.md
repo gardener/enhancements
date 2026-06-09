@@ -1,16 +1,5 @@
 # GEP-0016: Dynamic kubeconfig generation for Shoot clusters
 
-## Table of Contents
-
-- [GEP-0016: Dynamic kubeconfig generation for Shoot clusters](#gep-0016-dynamic-kubeconfig-generation-for-shoot-clusters)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-  - [Alternatives](#alternatives)
-
 ## Summary
 
 This `GEP` introduces a new  `Shoot` subresource called `AdminKubeconfigRequest`, allowing for users to dynamically generate a short-lived `kubeconfig` that can be used to access the `Shoot` cluster as `cluster-admin`.

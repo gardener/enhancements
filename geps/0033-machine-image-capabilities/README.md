@@ -1,14 +1,5 @@
 # GEP-0033: Machine Image Capabilities
 
-## Table of Contents
-
-- [Summary](#summary)
-- [Motivation](#motivation)
-  - [Goals](#goals)
-  - [Non-Goals](#non-goals)
-- [Proposal](#proposal)
-- [Alternatives](#alternatives)
-
 ## Summary
 
 This GEP proposes the introduction of capabilities for machineType and machineImage in the Gardener CloudProfile to ensure only shoots with a matching set of capabilities on machine type and image will be admitted by Gardener.
@@ -59,7 +50,6 @@ The user has to know about that and select the proper machine image manually AND
 For each infrastructure provider Gardener operators must provide a CloudProfile.
 It describes the catalog of machines, images and other resources of the infrastructure provider.
 Only machines and images that are described in the CloudProfile can be used to create a shoot.
-
 
 There are three places in the CloudProfile where metadata is required:
 
@@ -351,7 +341,6 @@ The following implications are to be considered in regards to `NamespacedCloudPr
 * For custom machine image versions, the `capabilities` need to be defined in the `NamespacedCloudProfile`, as they would be in the `CloudProfile` (as well as for the `providerConfig`).
    
 * This has also implications on later-added equal machine image versions to the parent `CloudProfile`: On conflicting definition, the machine image version of the `NamespacedCloudProfile` will be rendered in the resulting status (see [this PR](https://github.com/gardener/gardener/pull/11093) for reference).
-
 
 ### Migration Strategy
 

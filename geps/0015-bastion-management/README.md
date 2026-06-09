@@ -1,27 +1,11 @@
 # GEP-0015: Bastion Management and SSH Key Pair Rotation
 
-## Table of Contents
-
-- [GEP-0015: Bastion Management and SSH Key Pair Rotation](#gep-0015-bastion-management-and-ssh-key-pair-rotation)
-  - [Table of Contents](#table-of-contents)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Involved Components](#involved-components)
-    - [SSH Flow](#ssh-flow)
-    - [Resource Example](#resource-example)
-  - [SSH Key Pair Rotation](#ssh-key-pair-rotation)
-    - [Rotation Proposal](#rotation-proposal)
-    - [Limitations](#limitations)
-
 ## Motivation
 `gardenctl` (v1) has the functionality to setup `ssh` sessions to the targeted shoot cluster (nodes). To this end, infrastructure resources like VMs, public IPs, firewall rules, etc., have to be created. `gardenctl` will clean up the resources after termination of the `ssh` session (or rather, when the operator is done with her work). However, there were issues in the past where these infrastructure resources were not properly cleaned up afterwards, e.g., due to some error (no retries, either). Hence, the proposal is to have a dedicated controller (for each infrastructure) that manages the infrastructure resources and their cleanup. The current `gardenctl` also reused the `ssh` node credentials for the bastion host. While that's possible, it would be safer to rather use personal or generated `ssh` key pairs to access the bastion host.
 The static shoot-specific `ssh` key pair should be rotated regularly, e.g., once in the maintenance time window. This also means that we cannot create the node VMs anymore with infrastructure public keys as these cannot be revoked or rotated (e.g. in AWS) without terminating the VM itself.
 
 Changes to the `Bastion` resource should only be allowed for controllers on seeds that are responsible for it. This cannot be restricted when using custom resources.
 The proposal, as outlined below, suggests to implement the necessary changes in the gardener core components and to adapt the [SeedAuthorizer](https://github.com/gardener/gardener/issues/1723) to consider `Bastion` resources that the Gardener API Server serves.
-
 
 ### Goals
 - Operators can request and will be granted time-limited `ssh` access to shoot cluster nodes via bastion hosts.

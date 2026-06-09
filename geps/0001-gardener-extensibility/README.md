@@ -1,40 +1,5 @@
 # GEP-0001: Gardener Extensibility and Extraction of Cloud-Specific/OS-Specific Knowledge ([#308](https://github.com/gardener/gardener/issues/308), [#262](https://github.com/gardener/gardener/issues/262))
 
-## Table of Contents
-
-- [GEP-0001: Gardener Extensibility and Extraction of Cloud-Specific/OS-Specific Knowledge (#308, #262)](#gep-0001-gardener-extensibility-and-extraction-of-cloud-specificos-specific-knowledge-308-262)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Modification of Existing `CloudProfile` and `Shoot` Resources](#modification-of-existing-cloudprofile-and-shoot-resources)
-      - [CloudProfiles](#cloudprofiles)
-      - [Shoots](#shoots)
-    - [CRD Definitions and Workflow Adaptation](#crd-definitions-and-workflow-adaptation)
-      - [Custom Resource Definitions](#custom-resource-definitions)
-        - [DNS Records](#dns-records)
-        - [Infrastructure Provisioning](#infrastructure-provisioning)
-        - [Backup Infrastructure Provisioning](#backup-infrastructure-provisioning)
-        - [Cloud Config (User-Data) for Bootstrapping Machines](#cloud-config-user-data-for-bootstrapping-machines)
-        - [Worker Pools Definition](#worker-pools-definition)
-        - [Generic Resources](#generic-resources)
-      - [Shoot State](#shoot-state)
-      - [Shoot Health Checks/Conditions](#shoot-health-checksconditions)
-      - [Reconciliation Flow](#reconciliation-flow)
-      - [Deletion Flow](#deletion-flow)
-    - [gardenlet](#gardenlet)
-    - [Shoot Control Plane Movement/Migration](#shoot-control-plane-movementmigration)
-    - [BackupInfrastructure Migration](#backupinfrastructure-migration)
-  - [Registration of External Controllers at Gardener](#registration-of-external-controllers-at-gardener)
-  - [Other Cloud-Specific Parts](#other-cloud-specific-parts)
-    - [Defaulting and Validation Admission Plugins](#defaulting-and-validation-admission-plugins)
-    - [DNS Hosted Zone Admission Plugin](#dns-hosted-zone-admission-plugin)
-    - [Shoot Quota Admission Plugin](#shoot-quota-admission-plugin)
-    - [Shoot Maintenance Controller](#shoot-maintenance-controller)
-  - [Alternatives](#alternatives)
-
 ## Summary
 
 Gardener has evolved to a large compound of packages containing lots of highly specific knowledge, which makes it very hard to extend (supporting a new cloud provider, new OS, ..., or behaving differently depending on the underlying infrastructure).

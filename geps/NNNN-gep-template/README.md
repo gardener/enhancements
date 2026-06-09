@@ -1,20 +1,5 @@
 # GEP-NNNN: Your short, descriptive title
 
-## Table of Contents
-
-- [GEP-NNNN: Your short, descriptive title](#gep-nnnn-your-short-descriptive-title)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Notes/Constraints/Caveats (Optional)](#notesconstraintscaveats-optional)
-    - [Risks and Mitigations](#risks-and-mitigations)
-  - [Design Details](#design-details)
-  - [Drawbacks](#drawbacks)
-  - [Alternatives](#alternatives)
-
 ## Summary
 
 <!--

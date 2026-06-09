@@ -1,21 +1,5 @@
 # GEP-0022: Improved Usage of the `ShootState` API
 
-## Table of Contents
-
-<!-- TOC -->
-- [GEP-0022: Improved Usage of the `ShootState` API](#gep-0022-improved-usage-of-the-shootstate-api)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-  - [Alternatives](#alternatives)
-  - [Future Improvements](#future-improvements)
-    - [Eliminating the `Worker` State Reconciler](#eliminating-the-worker-state-reconciler)
-    - [Compressing the `ShootState` Data](#compressing-the-shootstate-data)
-<!-- TOC -->
-
 ## Summary
 
 For each `Shoot` resource, `gardenlet` creates a corresponding `ShootState` resource which has the same lifecycle as the `Shoot`.

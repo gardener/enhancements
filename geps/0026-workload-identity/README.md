@@ -1,25 +1,5 @@
 # GEP-0026: Workload Identity - Trust Based Authentication
 
-## Table of Contents
-
-- [GEP-0026: Workload Identity - Trust Based Authentication](#gep-0026-workload-identity---trust-based-authentication)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [API Changes](#api-changes)
-      - [Shoot API Related Changes](#shoot-api-related-changes)
-      - [Seed API Related Changes](#seed-api-related-changes)
-    - [Gardener as OIDC Token Issuer](#gardener-as-oidc-token-issuer)
-    - [Distribution of Workload Identity Tokens](#distribution-of-workload-identity-tokens)
-    - [Use cases](#use-cases)
-  - [Alternatives](#alternatives)
-    - [SPIFFE/SPIRE](#spiffespire)
-    - [Kubernetes Service Account Tokens From Garden Cluster](#kubernetes-service-account-tokens-from-garden-cluster)
-    - [Kubernetes Service Account Tokens From Seed Cluster](#kubernetes-service-account-tokens-from-seed-cluster)
-
 ## Summary
 
 Gardener issues and distributes JSON Web Tokens that can be used for

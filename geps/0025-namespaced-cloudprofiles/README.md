@@ -1,31 +1,5 @@
 # GEP-0025: Namespaced Cloud Profiles
 
-## Table of Contents
-
-- [GEP-0025: Namespaced Cloud Profiles](#gep-0025-namespaced-cloud-profiles)
-  - [Table of Contents](#table-of-contents)
-  - [Summary](#summary)
-  - [Motivation](#motivation)
-    - [Context](#context)
-    - [Current State](#current-state)
-    - [Goals](#goals)
-    - [Non-Goals](#non-goals)
-  - [Proposal](#proposal)
-    - [Approach](#approach)
-    - [Manifest](#manifest)
-    - [Rendering](#rendering)
-    - [Custom RBAC verb](#custom-rbac-verb)
-    - [Preventing deletion of certain fields in parent `CloudProfile`](#preventing-deletion-of-certain-fields-in-parent-cloudprofile)
-    - [Adjusting `Shoot`s `cloudProfileName` field](#adjusting-shoots-cloudprofilename-field)
-    - [Migration path](#migration-path)
-  - [Outlook](#outlook)
-    - [Cross-project sharing](#cross-project-sharing)
-    - [Multi-Level inheritance](#multi-level-inheritance)
-    - [`NamespacedCloudProfile`s replacing regular `CloudProfile`s](#namespacedcloudprofiles-replacing-regular-cloudprofiles)
-  - [Alternatives](#alternatives)
-    - [Arbitrary Value Fields](#arbitrary-value-fields)
-    - [Namespaced Cloud Profiles by Selection](#namespaced-cloud-profiles-by-selection)
-
 ## Summary
 
 [CloudProfiles](https://github.com/gardener/gardener/blob/master/docs/concepts/apiserver.md#cloudprofiles) are non-namespaced objects that are managed centrally by Gardener operators. They usually contain not only global configuration, but options that are relevant to certain projects only (e.g. special machine types). This increases the operation burden for operators and clutters `CloudProfile` objects. On the other hand, users are blocked until the requested special configuration is rolled out to the desired landscapes.
