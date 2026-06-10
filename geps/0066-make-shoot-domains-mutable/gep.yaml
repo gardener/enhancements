@@ -2,9 +2,8 @@ title: "Make Shoot Domains Mutable"
 gep-number: 0066
 authors:
 - "@ftl"
-steering-link: https://gardener.cloud/community/steering/66-shoot-domains-mutable
+steering-link: 
 status: provisional
 creation-date: 2026-06-10
 reviewers:
-- "@timebertt"
 approvers:
