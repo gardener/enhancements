@@ -1,0 +1,13 @@
+title: "Gateway API extension for Gardener shoot clusters"
+gep-number: 0068
+authors:
+- "@docktofuture"
+steering-link:
+status: provisional
+creation-date: 2026-06-11
+reviewers:
+- "@ScheererJ"
+- "@rfranzke"
+- "@timebertt"
+approvers:
+
