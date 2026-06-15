@@ -48,14 +48,14 @@
 ## Summary
 
 The Kubernetes ecosystem is converging on the [Gateway API](https://gateway-api.sigs.k8s.io/)
-as the long-term successor to the `Ingress` resource. Gateway API graduated to GA
-with v1.0 in October 2023 and has since received broad implementation support
+as the long-term successor to the `Ingress` resource. [Gateway API graduated to GA
+with v1.0 in October 2023](https://kubernetes.io/blog/2023/10/31/gateway-api-ga/) and has since received broad implementation support
 across the CNCF landscape. With [GEP-57](../0057-replace-nginx-ingress-shoot-addon-with-traefik-extension/README.md)
 already establishing a Traefik-based replacement for the retired Ingress NGINX
 shoot addon, Gardener users now need a dedicated, first-class option for
 Gateway API workloads in their shoot clusters.
 
-After a detailed evaluation of all major open-source Gateway API
+After a detailed evaluation of several unknown open-source Gateway API
 implementations — Envoy Gateway, Traefik, Istio, Kgateway, Cilium, Kong, and
 NGINX Gateway Fabric — informed by the upstream conformance benchmark
 [gateway-api-bench](https://github.com/howardjohn/gateway-api-bench), this GEP
@@ -76,8 +76,8 @@ one, using the controller name
 
 ## Motivation
 
-Gardener's current ingress story is anchored on the legacy `Ingress` resource
-and — going forward — on the Traefik-based replacement defined in GEP-57.
+Gardener's current ingress story is anchored on the proven `Ingress` resource
+and — going forward — on the Traefik-based `Ingress` controller implementation defined in GEP-57.
 Both options serve the same purpose: a single resource type for HTTP host/path
 routing. The shortcomings of `Ingress` are well known:
 
@@ -110,27 +110,32 @@ Key problems this GEP addresses:
   fragmented, unsupported landscape) or stay on `Ingress` and accept its
   limitations.
 
-* **Forward-compatible migration**: Workloads built today on the new Traefik
-  ingress extension or on legacy NGINX `Ingress` resources will eventually
-  need a path to Gateway API. Providing a first-class extension now means
-  this migration can happen incrementally and per-shoot, instead of as a
-  big-bang break.
+* **Choice and forward compatibility**: `Ingress` remains a fully supported
+  API and is not going away. However, some cluster owners will want to
+  adopt Gateway API for its richer feature set. Providing a first-class
+  extension gives shoot owners the freedom to choose — they can stay on
+  `Ingress`, move to Gateway API, or run both side by side. For those who
+  do decide to migrate, the transition can happen incrementally and
+  per-shoot rather than as a big-bang break.
 
-* **Multi-tenancy and role separation**: Gardener shoots are commonly used
-  by multiple teams. Gateway API's persona-based resource split aligns much
-  better with how Gardener users organise platform vs. application
-  ownership inside a shoot than annotation-driven `Ingress` does.
+* **Optional role separation**: Some Gardener shoots are shared by multiple
+  teams where platform admins and application developers have distinct
+  responsibilities. Gateway API's persona-based resource model
+  (`GatewayClass` → `Gateway` → `*Route`) enables a separation of concerns
+  that `Ingress` does not offer natively. For single-team shoots or simpler
+  setups where this split is unnecessary, `Ingress` remains a
+  straightforward and perfectly valid choice.
 
 * **Vendor neutrality and conformance**: Gateway API has a published
-  conformance suite. Selecting a conformant implementation gives Gardener
-  users portable routing semantics — workloads written against `HTTPRoute`
-  in a Gardener shoot will behave the same way in any other conformant
-  cluster.
-
-* **L4 + L7 unified**: Several Gardener users today bolt MetalLB or
-  cloud-provider LBs in front of `Ingress` controllers to handle TCP/UDP.
-  Gateway API's `TCPRoute`/`TLSRoute`/`UDPRoute` collapse this into a single
-  programming model.
+  conformance suite, and workloads that stick to the standard-channel
+  resources (`HTTPRoute`, `GRPCRoute`, etc.) are portable across conformant
+  implementations in principle. In practice, however, most non-trivial
+  deployments will rely on implementation-specific extensions — Envoy
+  Gateway's `EnvoyPatchPolicy`/`EnvoyExtensionPolicy`, Istio's
+  `EnvoyFilter`, etc. — which limits real-world portability. The
+  conformance suite nonetheless provides a useful baseline: the standard
+  routing semantics are well-defined, and simple-to-moderate use cases
+  transfer across implementations without modification.
 
 ### Goals
 
@@ -153,14 +158,16 @@ Key problems this GEP addresses:
    shoots with `purpose: evaluation`, mirroring the rollout strategy of
    GEP-57.
 7. Document a clear migration path from `Ingress` (both legacy NGINX and
-   the GEP-57 Traefik extension) to `HTTPRoute`.
+   the GEP-57 Traefik extension) to `HTTPRoute`, building on the upstream
+   [Migrating from Ingress](https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/)
+   guide.
 
 ### Non-Goals
 
 1. This GEP does **not** propose migrating Gardener core
    (`gardener/gardener`) to Gateway API. Gardener core is currently in the
-   process of replacing its built-in NGINX-based ingress with another
-   `Ingress`-based solution; an internal switch from `Ingress` to Gateway
+   process of replacing its built-in NGINX-based ingress with [another
+   solution](https://github.com/gardener/gardener/issues/13448); an internal switch from `Ingress` to Gateway
    API is not on the roadmap and is not what this GEP is about. This GEP
    strictly concerns user-facing ingress *inside* the shoot cluster.
 2. This GEP does **not** deprecate or remove the GEP-57
@@ -238,20 +245,24 @@ Gateway API and the other candidates because of:
 * **Conformance**: Full support for the Gateway API standard channel; no
   reported correctness issues in the upstream benchmark beyond a known
   memory leak under churn (see [Risks and Mitigations](#risks-and-mitigations)).
-* **Foundation**: Built on Envoy, the same data plane used by Istio,
-  Kgateway, and most large-scale production gateway deployments — meaning
-  the data path itself is the most battle-tested codebase in the field.
-* **CNCF stewardship**: Hosted under the Envoy organisation in CNCF, with
-  multi-vendor maintainers — no single-vendor lock-in.
+* **Foundation**: Built on [Envoy](https://www.envoyproxy.io/), the same
+  data plane used by [Istio](https://istio.io/),
+  [Kgateway](https://kgateway.dev/), and most cloud-native gateway and
+  service-mesh products — a widely adopted and well-proven data path in
+  the Kubernetes ecosystem.
+* **CNCF stewardship**: Hosted under the [Envoy organisation](https://www.envoyproxy.io/community)
+  in [CNCF](https://www.cncf.io/), with multi-vendor maintainers — no
+  single-vendor lock-in.
 
 Traefik Gateway API was a strong runner-up but rejected for two concrete
-reasons documented in the upstream benchmark: (1) it consolidates Gateways
-across namespaces into a shared data-plane process, which violates the
-Gateway API spec's namespace isolation expectations and creates a noisy-
-neighbour risk in multi-tenant shoots; and (2) its status reporting is slow
-(~180 seconds for status updates on large route sets) and it fails to apply
-large route volumes — both deal-breakers for shoots with many application
-teams.
+reasons documented in the upstream benchmark:
+
+1. It consolidates Gateways across namespaces into a shared data-plane
+   process, which violates the Gateway API spec's namespace isolation
+   expectations and creates a noisy-neighbour risk in multi-tenant shoots.
+2. Its status reporting is slow (~180 seconds for status updates on large
+   route sets) and it fails to apply large route volumes — both
+   deal-breakers for shoots with many application teams.
 
 ### Notes/Constraints/Caveats
 
@@ -263,9 +274,11 @@ teams.
 
 * **Experimental channel is opt-in.** The `gateway.networking.k8s.io/v1alpha2`
   experimental CRDs (`TCPRoute`, `TLSRoute`, `UDPRoute`, `BackendTLSPolicy`)
-  are not installed by default. They can be enabled via
-  `spec.experimentalFeatures: true` in `EnvoyGatewayConfig`. Operators should
-  be aware that experimental APIs may change in backwards-incompatible ways.
+  are not installed by default. They can be enabled by setting
+  `spec.experimentalFeatures: true` in the extension's provider config
+  (`spec.extensions[].providerConfig` on the Shoot, see [API](#api)).
+  Operators should be aware that experimental APIs may change in
+  backwards-incompatible ways.
 
 * **Envoy Gateway CRDs (e.g. `EnvoyProxy`, `BackendTrafficPolicy`,
   `ClientTrafficPolicy`, `SecurityPolicy`) are also installed.** These are
@@ -298,7 +311,7 @@ teams.
 | Gateway API CRD conflicts if user pre-installed them | Low | High | CRDs are part of the shoot `ManagedResource` and applied via server-side apply; existing CRDs are updated idempotently without field-ownership conflicts. The extension's CRD reconciliation is opt-out via `spec.manageCRDs: false` for users who manage CRDs themselves. |
 | Limited annotation/feature parity with NGINX or Traefik Ingress | High | Medium | Documented migration guide: most NGINX `Ingress` annotations have a direct `HTTPRoute` filter or Envoy `BackendTrafficPolicy` equivalent. Users requiring features not yet expressible in standard Gateway API are advised to remain on the Traefik extension until the experimental channel covers their case. |
 | Operators end up with three concurrent ingress paths in one shoot (legacy NGINX, Traefik, Gateway API) | Medium | Medium | Documentation strongly recommends a single ingress path per shoot in production. The evaluation-purpose scope of both extensions limits the blast radius during the rollout phase. |
-| Ecosystem churn: Gateway API adds new GA features in v1.2 / v1.3 | High | Low | The extension declares conformance against a specific Gateway API release in its release notes and bumps deliberately, not automatically. |
+| Ecosystem churn: Gateway API evolves rapidly (v1.5 as of early 2026, v1.6 in progress) | High | Low | The extension declares conformance against a specific Gateway API release in its release notes and bumps deliberately, not automatically. |
 
 
 ## Design Details
@@ -435,6 +448,32 @@ This object is embedded as `providerConfig` in the Shoot's
 defaulting are handled by the API machinery registered under
 `envoy-gateway.extensions.gardener.cloud/v1alpha1`.
 
+A Shoot enabling the extension looks like this:
+
+```yaml
+apiVersion: core.gardener.cloud/v1beta1
+kind: Shoot
+metadata:
+  name: my-shoot
+  namespace: garden-my-project
+spec:
+  purpose: evaluation
+  extensions:
+  - type: shoot-envoy-gateway
+    providerConfig:
+      apiVersion: envoy-gateway.extensions.gardener.cloud/v1alpha1
+      kind: EnvoyGatewayConfig
+      spec:
+        controlPlaneReplicas: 2
+        dataPlaneReplicas: 2
+        logLevel: info
+        experimentalFeatures: false
+  # ... remaining shoot spec
+```
+
+To enable the experimental Gateway API CRDs, set
+`spec.experimentalFeatures: true` in the provider config above.
+
 ### Provider Modes
 
 The extension does not expose multiple back-end providers. Unlike the
@@ -470,11 +509,11 @@ The extension interacts with Gardener's lifecycle protocol as follows:
 | Phase | Behaviour |
 |-------|-----------|
 | Reconcile | Creates/updates a `ManagedResource` in the shoot namespace on the seed with all shoot-cluster resources (Gateway API CRDs, Envoy Gateway CRDs, control-plane Deployment, Service, RBAC, PDB, optional HPA/VPA, and the `envoy-gateway` `GatewayClass`). Waits for the `ManagedResource` to become healthy before marking the `Extension` as reconciled. |
-| Delete (extension disabled, shoot kept) | Refuses to remove the extension while user-owned `Gateway` objects still exist in the shoot (to prevent silent traffic loss). The admission webhook surfaces this as a validation error on the `Shoot` update. Once the user has cleaned up their `Gateway`/`*Route` objects, the `ManagedResource` is deleted and the extension waits up to 5 minutes for managed objects to disappear. |
-| Delete (shoot deletion) | Shoot deletion bypasses the "Gateways still exist" guard — the entire shoot is going away anyway, so blocking would only leak the shoot. The extension's `Extension` resource is reconciled with `lifecycle.delete: BeforeKubeAPIServer`, so the `ManagedResource` (Envoy Gateway control plane, CRDs, the `envoy-gateway` `GatewayClass`, EnvoyProxy/HTTPRoute/Gateway instances) is torn down before the shoot's API server is removed. The cloud-provider `LoadBalancer` Services that were created for each `Gateway` are deleted as part of the shoot's normal `Service` cleanup, freeing the underlying load balancers. No manual cleanup of `Gateway` objects is required from the user. |
+| Delete (extension disabled, shoot kept) | The `Delete` reconciler reads the `Cluster` resource and checks `cluster.Shoot.DeletionTimestamp`. When it is **nil** (shoot stays), the extension refuses to remove itself while user-owned `Gateway` objects still exist in the shoot (to prevent silent traffic loss). The admission webhook surfaces this as a validation error on the `Shoot` update. Once the user has cleaned up their `Gateway`/`*Route` objects, the `ManagedResource` is deleted and the extension waits up to 5 minutes for managed objects to disappear. |
+| Delete (shoot deletion) | When `cluster.Shoot.DeletionTimestamp` is **non-nil**, the entire shoot is going away, so the "Gateways still exist" guard is bypassed — blocking would only leak the shoot. The extension's `Extension` resource is reconciled with `lifecycle.delete: BeforeKubeAPIServer`, so the `ManagedResource` (Envoy Gateway control plane, CRDs, the `envoy-gateway` `GatewayClass`, EnvoyProxy/HTTPRoute/Gateway instances) is torn down before the shoot's API server is removed. The cloud-provider `LoadBalancer` Services that were created for each `Gateway` are deleted as part of the shoot's normal `Service` cleanup, freeing the underlying load balancers. No manual cleanup of `Gateway` objects is required from the user. |
 | Heartbeat | Extension controller participates in the Gardener heartbeat protocol and reports liveness. |
 | Metrics | Prometheus metrics are exposed on port 8080 under `/metrics`; Gardener's monitoring stack can scrape them via `ServiceMonitor`. The Envoy data-plane and Envoy Gateway control-plane also expose Prometheus metrics that are scraped via separate `ServiceMonitor` objects. |
-| VPA/HPA | Optional VPA and HPA manifests for the control-plane and data-plane pods are provided in the Helm chart (VPA enabled by default, HPA opt-in). |
+| VPA/HPA | Optional VPA and HPA manifests are provided for both the Envoy Gateway control-plane and the Envoy data-plane pods in the shoot cluster (VPA enabled by default, HPA opt-in). The extension controller on the seed has its own VPA configuration (see [Extension Registration](#extension-registration)). |
 
 ### Coexistence with `shoot-traefik`
 
@@ -535,11 +574,11 @@ implementations on conformance, scale, and performance.
 
 ### Candidates Considered
 
-The candidate list includes every implementation that ships a usable
+The candidate list includes several common implementations that ship a usable
 Gateway API standard-channel controller as of late 2025. Implementations
 shipping only the Ingress API are excluded.
 
-#### 1. Envoy Gateway
+#### 1. [Envoy Gateway](https://gateway.envoyproxy.io/)
 
 Selected. See [Why Envoy Gateway Over Traefik Gateway API](#why-envoy-gateway-over-traefik-gateway-api).
 
@@ -554,7 +593,7 @@ Selected. See [Why Envoy Gateway Over Traefik Gateway API](#why-envoy-gateway-ov
 * **L4**: `TCPRoute`, `TLSRoute`, `UDPRoute` all supported.
 * **Dependencies**: None beyond Kubernetes and the Gateway API CRDs.
 
-#### 2. Traefik Gateway API
+#### 2. [Traefik Gateway API](https://doc.traefik.io/traefik/routing/providers/kubernetes-gateway/)
 
 Runner-up. Rejected primarily on architectural correctness in multi-tenant
 scenarios, on slow status reconciliation, and on benchmarked failures with
@@ -563,10 +602,14 @@ large route volumes.
 * **Throughput** (gateway-api-bench): ~217k qps — solid mid-pack.
 * **Architecture concern**: The upstream benchmark notes that Traefik
   *"consolidates all Gateways across namespaces unsafely"*, meaning a
-  single Traefik process serves Gateways from multiple namespaces. In a
-  multi-tenant Gardener shoot, this is a tenant-isolation violation.
+  single Traefik process serves Gateways from multiple namespaces. This
+  is essentially how most `Ingress` controllers operate and may be
+  perfectly acceptable for single-team shoots, but it conflicts with
+  Gateway API's explicit namespace-isolation model and creates a
+  noisy-neighbour risk in multi-tenant scenarios.
 * **Status reporting**: ~180 seconds latency to reflect status on large route
-  sets — incompatible with GitOps tooling that polls for `Ready` conditions.
+  sets — slow enough to cause timeouts or prolonged sync delays in GitOps
+  tooling (Argo CD, Flux) that waits for `Ready` conditions.
 * **Scale failure**: Reported failure to apply large route volumes. The
   extension would need to publish hard upper bounds on routes per shoot.
 * **Migration story**: Best-in-class for users coming from NGINX `Ingress`,
@@ -579,7 +622,7 @@ large route volumes.
 * **Governance**: Single-vendor (Traefik Labs). Open source, but no
   CNCF status.
 
-#### 3. Istio Ingress Gateway (with Gateway API)
+#### 3. [Istio Ingress Gateway](https://istio.io/latest/docs/tasks/traffic-management/ingress/gateway-api/) (with Gateway API)
 
 Strong technical fit but rejected on operational footprint.
 
@@ -598,7 +641,7 @@ Strong technical fit but rejected on operational footprint.
   their `Gateway` resources. This extension targets the lighter, mesh-free
   use case.
 
-#### 4. Kgateway (formerly Gloo Gateway, k8sgateway)
+#### 4. [Kgateway](https://kgateway.dev/) (formerly Gloo Gateway, k8sgateway)
 
 Best raw throughput in the benchmark but ruled out on maturity and
 governance.
@@ -611,7 +654,7 @@ governance.
   sandbox stage is too early for a default Gardener shipping decision.
   Re-evaluation is appropriate once the project graduates to incubation.
 
-#### 5. Cilium Gateway API
+#### 5. [Cilium Gateway API](https://docs.cilium.io/en/stable/network/servicemesh/gateway-api/gateway-api/)
 
 Rejected on performance and configuration robustness.
 
@@ -625,7 +668,7 @@ Rejected on performance and configuration robustness.
   preclude users from installing the Cilium `GatewayClass` independently;
   it just doesn't use it as the default.
 
-#### 6. Kong Gateway
+#### 6. [Kong Gateway](https://docs.konghq.com/gateway/latest/)
 
 Rejected on correctness and namespace isolation.
 
@@ -638,7 +681,7 @@ Rejected on correctness and namespace isolation.
 * **Governance**: Kong Inc. with a CNCF-adjacent ecosystem. Not blocking,
   but combined with the correctness issues this candidate did not advance.
 
-#### 7. NGINX Gateway Fabric
+#### 7. [NGINX Gateway Fabric](https://github.com/nginx/nginx-gateway-fabric)
 
 Rejected on performance and stability.
 
