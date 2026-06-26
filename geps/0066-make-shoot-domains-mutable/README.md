@@ -1,19 +1,18 @@
 # GEP-0066: Make Shoot Domains Mutable
 
-
 ## Summary
 This GEP proposes to provide a mechanism to make both the internal and external domains of a Shoot mutable. In certain environments, the internal domain can even be removed completely. The migration process after changing, adding, or removing a domain is carried out as part of a CA rotation.
 
 ## Motivation
-Every Gardener environment requires at least one DNS zone for managing "internal domains" of shoots. The zone can be configured per seed.
-The internal domain is especially useful, when shoot owners can configure their own "external domain"/provider/zone for their shoot API servers (i.e., via Shoot.spec.dns). 
-The internal domain is used for all cluster-critical communication (e.g., kubelet/gardener-node-agent to API server) to ensure robustness and prevent disruptions caused by user configurations.
+Every Gardener environment requires at least one DNS zone for managing "internal domains" of shoots. The internal domain is especially useful, when shoot owners can configure their own "external domain"/provider/zone for their shoot API servers (i.e., via Shoot.spec.dns). It is used for all cluster-critical communication (e.g., kubelet/gardener-node-agent to API server) to ensure robustness and prevent disruptions caused by user configurations.
 
-Some Gardener setups don't grant users access to the Shoot API but offer a different ("proxy") API (e.g., STACKIT Kubernetes Engine). In those setups, the environment has full control over the external domain, it is not configurable by shoot owners. Having a second fully controlled internal domain does not provide any additional value in regards of robustness or availability. 
+Currently, an existing shoot's internal domain cannot be changed. Although, in real life, there are several cases, where domain names need to be changed also for existing shoots, for example because of a wrong configuration in the first place, or due to compliance reasons.
 
-Currently, every Shoot receives a Gardener-managed internal domain. This is not always desired (for example with private DNS or shared zones) or necessary (for example with fully controlled external domains), and cannot be changed easily. In other scenarios, it might be necessary to modify the internal or external domains of a single Shoot cluster or even of all Shoots on a Seed, for example due to compliance reasons.
+Some Gardener setups don't grant users access to the Shoot API, but offer a different ("proxy") API (e.g., STACKIT Kubernetes Engine). In those setups, the environment has full control over the external domain. As it is not configurable by the shoot owners, the environment can make sure, that the external domain is valid and available. Having an internal domain in such an environment is not strictly necessary, at least not in behalf of robustness and availability. 
 
-A native way to manage these domains, including migrations, is required. The internal domain should be optional.
+As the internal domain is currently configured per seed, all shoots on a seed share the same internal domain zone. Consequently, if that zone is public, a shoot's internal domain will be publicly exposed, even if the shoot resides in a private network zone. 
+
+A native way to manage these domains would improve the user experience for all of the described cases. Internal and external domains should be mutable, the internal domain should even be optional in cases, where the external domain is sufficient.
 
 ### Goals
 - Support changing both the internal and external domain of existing Shoots.
