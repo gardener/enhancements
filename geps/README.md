@@ -20,7 +20,7 @@ GEPs are used for topics that require discussion and decision-making in Gardener
    - Follow the [process](../README.md#-how-to-propose-a-gardener-enhancement) and structure outlined in the [**GEP template**](./NNNN-gep-template/README.md).
    - Submit the proposal as a Pull Request to this repository.
    - The steering committee will start reviewing your PR - please react on their feedback!
-   - Once the initial PR reviews have been completed, a member of the steering committee will coordinate scheduling a meeting to discuss the GEP.
+   - Once the initial PR reviews have been completed, a member of the steering committee will schedule a meeting in the recurring Thursday slot (10:00–11:00 CET), usually about two weeks out.
 
 ---
 
