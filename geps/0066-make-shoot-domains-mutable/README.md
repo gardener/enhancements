@@ -2,7 +2,7 @@
 
 
 ## Summary
-This GEP proposes to provide a mechanism to migrate both the internal and external domains of a single Shoot, or even of all Shoots on a Seed, and to make the internal domain for Shoot clusters optional.
+This GEP proposes to provide a mechanism to make both the internal and external domains of a Shoot mutable. In certain environments, the internal domain can even be removed completely. The migration process after changing, adding, or removing a domain is carried out as part of a CA rotation.
 
 ## Motivation
 Every Gardener environment requires at least one DNS zone for managing "internal domains" of shoots. The zone can be configured per seed.
