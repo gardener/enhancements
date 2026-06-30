@@ -32,25 +32,30 @@ A native way to manage these domains would improve the user experience for all o
 Because the internal and external domains are part of a Shoot's network setup, the existing CA rotation mechanism can be reused for domain migrations.
 
 **Flow of Operation for Single Shoots:**
-- The operator modifies the domain configuration in the Shoot spec according to their needs **AND** adds the annotation `gardener.cloud/operation=rotate-ca-start` to trigger the migration.
+- A authorized user modifies the domain configuration in the Shoot spec according to their needs **AND** adds the annotation `gardener.cloud/operation=rotate-ca-start` to trigger the migration.
 - The two-phase CA rotation is started.
-- In the `PREPARING` phase, the new DNS records are created and appended to the server certificates, while the old ones are still kept in place to allow a seamless transition.
-- In the `COMPLETING` phase, the obsolete DNS records deleted and the corresponding domains are removed from the server certificate.
+- In the `PREPARING` phase, the DNS records for new domain names are created and appended to the server certificates, while the old domain names are still kept in place to allow a seamless transition.
+- When the `PREPARED` phase is reached, the cluster is available through its new domain names. This must be checked, additionally to all the new credentials.
+- In the `COMPLETING` phase, the obsolete DNS records are deleted and the corresponding domains are removed from the server certificates.
 
 Adding the triggering annotation in the same step as the actual domain modifications is mandatory.
 
-Make the internal domain optional for cases, where the external domain is fully under the environments control and the internal domain is not desired. Introduce the flag `spec.dns.internalDomain.enabled` in the Shoot API to indicate if the internal domain is actually needed for the Shoot. The flag is `true` by default (or if absent).
+To make the internal domain optional, introduce the flag `spec.dns.internalDomain.enabled` in the Shoot API. It indicates, if the internal domain is actually needed for the Shoot. The flag is `true` by default (or if absent).
 
-If the internal domain is disabled for a Shoot, its external domain is used instead.
+If the internal domain is disabled for a Shoot, its external domain is used in all places where the internal domain was used before, instead.
 
-### Migration Mechanism for Whole Seeds
-For cases where all Shoots on a Seed are affected (for example because of compliance requirements), introduce a way to provide the change information through the Seed spec. 
+### Migration Mechanism for Entire Seeds
+For cases where all Shoots on a Seed are affected (for example because of compliance requirements), introduce a way to provide the changed domain configuration through the Seed spec. 
 
-Since the CA rotation is a process that must be executed in a planned manner, adding the change information to the Seed spec must not trigger the CA rotation for the affected Shoots.
+Since the CA rotation is a process that must be executed in a planned manner, adding the changed information to the Seed spec must not automatically trigger the CA rotation for the affected Shoots.
 
-**Flow of Operation for Whole Seeds:**
-- The operator modifies the list of valid internal domains in the Seed spec according to their needs **AND** notifies all shoot owners that they should trigger a CA rotation.
-- Whenever a Shoot CA rotation is triggered, the internal domain of this Shoot is migrated to the first entry in the Seed's list of valid internal domains (or removed, if the internal domain disabled for this Shoot).
+**Flow of Operation for Entire Seeds:**
+- The operator modifies the list of valid internal domains in the Seed spec according to their needs **AND** notifies all Shoot owners that they should trigger a CA rotation.
+- Whenever a CA rotation is triggered for a specific Shoot on this Seed, the internal domain of this Shoot is migrated to the first entry in the Seed's list of valid internal domains.
+
+Therefore the Seed API is extended to provide a list of internal domains instead of a single value. The first entry in this list is the one that must be applied to new or reconciled Shoots, while the other entries are also valid. This pattern is already used in other places.
+
+Disabling the internal domains of all Shoots on a Seed is out of scope, this can only be done through the Shoot API.
 
 ### Securing Control Over the Domain Configuration
 Only users with the role `gardener.cloud:admin` must be able to modify the domain configuration of a Shoot or a Seed. Therefore, a new custom RBAC verb named `modify-spec-domains` is introduced, similar to the [`modify-spec-tolerations-whitelist`](https://github.com/gardener/gardener/blob/0025fc1765c6fdb9106249bb1754108acedb4362/docs/concepts/apiserver-admission-plugins.md#customverbauthorizer).
