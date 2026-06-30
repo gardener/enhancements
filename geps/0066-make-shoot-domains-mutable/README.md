@@ -29,7 +29,7 @@ A native way to manage these domains would improve the user experience for all o
 ## Proposal
 
 ### Migration Mechanism for Single Shoots
-Both the internal and external domain of a Shoot are part of its network communication setup information. Hence it is a natural fit to extend an already existing mechanism for the migration of another part of this information: the CA rotation mechanism.
+Because the internal and external domains are part of a Shoot's network setup, the existing CA rotation mechanism can be reused for domain migrations.
 
 **Flow of Operation for Single Shoots:**
 - The operator modifies the domain configuration in the Shoot spec according to their needs **AND** adds the annotation `gardener.cloud/operation=rotate-ca-start` to trigger the migration.
