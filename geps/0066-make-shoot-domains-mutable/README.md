@@ -18,7 +18,7 @@ A native way to manage these domains would improve the user experience for all o
 - Support changing both the internal and external domain of existing Shoots.
 - Make the internal domain optional, for example for gardener setups where the customer doesn't have access to the Shoot API and therefore can't change the DNS
 - Enforce that each Shoot has at least one valid domain.
-- Protect the ability to modify any domain with a new custom RBAC verb.
+- Protect the ability to modify any domain to prevent undesired/accidental changes.
 - Support a seamless migration of domains via the CA rotation mechanism.
 - Support seed-wide domain migrations.
 
