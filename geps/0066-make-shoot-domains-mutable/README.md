@@ -95,3 +95,4 @@ Only users with the role `gardener.cloud:admin` must be able to modify the domai
 ## Alternatives
 - **Manual Migration**: High risk of downtime and configuration errors.
 - **Separate Rotation Resource**: Over-complicates the user experience compared to extending the already existing CA rotation mechanism.
+- **Automatic CA Rotation on Domain Change**: A CA rotation has impact well beyond DNS. Requiring the annotation keeps users explicitly in control of a disruptive operation and guards against accidental/unintended domain changes silently triggering a full rotation.
