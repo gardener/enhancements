@@ -32,11 +32,11 @@ A native way to manage these domains would improve the user experience for all o
 Because the internal and external domains are part of a Shoot's network setup, the existing CA rotation mechanism can be reused for domain migrations.
 
 **Flow of Operation for Single Shoots:**
-- A authorized user modifies the domain configuration in the Shoot spec according to their needs **AND** adds the annotation `gardener.cloud/operation=rotate-ca-start` to trigger the migration.
+- An authorized user modifies the domain configuration in the Shoot spec according to their needs **AND** adds the annotation `gardener.cloud/operation=rotate-ca-start` to trigger the migration.
 - The two-phase CA rotation is started.
-- In the `PREPARING` phase, the DNS records for new domain names are created and appended to the server certificates, while the old domain names are still kept in place to allow a seamless transition. The new internal domain is prepended to `status.internalDomains`, so both the new (first) and the old internal domain are recorded as in use.
+- In the `PREPARING` phase, the DNS records for new domain names are created and appended to the server certificates, while the old domain names are still kept in place to allow a seamless transition. The new internal domain is prepended to `status.internalDomains`, so both the new (first) and the old internal domain are recorded as in use. If the Shoot uses the default ServiceAccount token issuer — which is derived from the internal domain — the new issuer becomes the primary one (used to mint new tokens), and the old issuer is added to the kube-apiserver's `serviceAccountConfig.acceptedIssuers`, so tokens already issued with the old `iss` claim remain valid during the transition.
 - When the `PREPARED` phase is reached, the cluster is available through its new domain names. This must be checked, additionally to all the new credentials.
-- In the `COMPLETING` phase, the obsolete DNS records are deleted and the corresponding domains are removed from the server certificates. The obsolete internal domain is removed from `status.internalDomains`, leaving only the new one.
+- In the `COMPLETING` phase, the obsolete DNS records are deleted and the corresponding domains are removed from the server certificates. The obsolete internal domain is removed from `status.internalDomains`, leaving only the new one. Likewise, the old issuer is removed from the kube-apiserver's `serviceAccountConfig.acceptedIssuers` (see `PREPARING`). Note that bound/projected tokens refresh automatically, but legacy long-lived secret-based tokens carrying the old issuer would then be invalidated.
 
 Adding the triggering annotation in the same step as the actual domain modifications is mandatory.
 
@@ -58,7 +58,9 @@ Therefore the Seed API is extended to provide a list of internal domains instead
 Disabling the internal domains of all Shoots on a Seed is out of scope, this can only be done through the Shoot API.
 
 ### Securing Control Over the Domain Configuration
-Only users with the role `gardener.cloud:admin` must be able to modify the domain configuration of a Shoot or a Seed. Therefore, a new custom RBAC verb named `modify-spec-domains` is introduced, similar to the [`modify-spec-tolerations-whitelist`](https://github.com/gardener/gardener/blob/0025fc1765c6fdb9106249bb1754108acedb4362/docs/concepts/apiserver-admission-plugins.md#customverbauthorizer).
+Only operators must be able to modify the domain configuration of a Shoot. Therefore, a new custom RBAC verb named `modify-spec-domains` is introduced, which protects the `Shoot.spec.dns.internalDomain` field, similar to the [`modify-spec-tolerations-whitelist`](https://github.com/gardener/gardener/blob/0025fc1765c6fdb9106249bb1754108acedb4362/docs/concepts/apiserver-admission-plugins.md#customverbauthorizer).
+
+The domain configuration on the Seed level is already restricted to operators.
 
 ### Risks and Mitigations
 
@@ -66,7 +68,7 @@ Only users with the role `gardener.cloud:admin` must be able to modify the domai
 | --- | --- | --- | --- |
 | Worker nodes are unavilable due to broken domain name resolution. | Low | High | The old DNS records and certificate SANs are kept during the first phase of the CA rotation ("prepare"). Only when all worker nodes are rolled and available under the new domain configuration, the obsolete DNS records and certificate SANs are removed. |
 | The domain configuration is inconsistent or invalid. | Low | High | The validation enforces that each Shoot has at least one valid domain. The CA rotation is only triggered, if the domain configuration is consitent and valid. |
-| Any user that has access to the Shoot or Seed CRD can modify a cluster's internal or external domain. | Mid | High | A new custom RBAC verb is introduced, which is only granted to the `gardener.cloud:admin` role. The verb is checked every time a modification of the domain configuration in a Shoot or Seed spec is detected. Unauthorized modifications are rejected. |
+| Any user that has access to the Shoot resource can modify a cluster's internal or external domain. | Mid | High | A new custom RBAC verb is introduced, which is only granted to the `gardener.cloud:admin` role. The verb is checked every time a modification of the domain configuration in a Shoot spec is detected. Unauthorized modifications are rejected. |
 | An operator removes an internal domain from a Seed that is still in use by Shoots. | Low | High | Seed admission rejects removing an internal domain that any Shoot on the Seed still records in `status.internalDomains`. |
 
 ## Design Details
@@ -79,7 +81,9 @@ Only users with the role `gardener.cloud:admin` must be able to modify the domai
 
 ### Extension of the CA Rotation Mechanism
 - **Phase 1 (Prepare)**: Deploy both old and new `DNSRecord` resources. Update APIServer SANs to include both. Issue new kubeconfigs with the new domain.
-- **Phase 2 (Complete)**: Cleanup old `DNSRecord` resources and remove the old domain from SANs.
+- **Phase 2 (Complete)**: Clean up the old `DNSRecord` resources and remove the old domain from the SANs. 
+
+If applicable, the ServiceAccount token issuer configuration must be updated as described in [Migration Mechanism for Single Shoots](#migration-mechanism-for-single-shoots).
 
 ### Extension of the Admission Mechanism
 - implement or extend a admission plugin that checks the new RBAC verb
