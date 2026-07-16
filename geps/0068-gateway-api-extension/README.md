@@ -433,6 +433,7 @@ spec:
       lifecycle:
         reconcile: AfterKubeAPIServer
         delete:   BeforeKubeAPIServer
+        migrate: AfterKubeAPIServer
   deployment:
     deploymentRefs:
       - name: gardener-extension-shoot-envoy-gateway
@@ -523,12 +524,20 @@ extension's own validation but are not blocked.
 
 ### Admission Webhook
 
-A `ValidatingWebhookConfiguration` is registered at path
-`/webhooks/validate-shoot-envoy-gateway`. It validates:
+A `ValidatingWebhookConfiguration` is registered in the garden cluster (the
+virtual garden), where `Shoot` resources live, at path
+`/webhooks/validate-shoot-envoy-gateway`. It validates incoming `Shoot`
+objects:
 
-1. **Purpose restriction**: The extension may only be enabled (`disabled:
-   false`) on Shoots whose `spec.purpose` is `evaluation`. Adding the
-   extension to a non-evaluation shoot is rejected with a descriptive error.
+1. **Purpose restriction** (temporary): The extension may only be enabled
+   (`disabled: false`) on Shoots whose `spec.purpose` is `evaluation`. Adding
+   the extension to a non-evaluation shoot is rejected with a descriptive
+   error. This restriction is a deliberate safety measure for the extension's
+   incubation phase and is **not** a permanent part of the API contract — it
+   is enforced purely in the webhook (no API change) and will be relaxed to
+   allow `development` and `production` shoots once the extension graduates
+   (see [Scope Restriction: Evaluation Shoots Only](#scope-restriction-evaluation-shoots-only)
+   and [Future Enhancements](#future-enhancements)).
 2. **Provider config schema**: If a non-nil `providerConfig` is supplied, it
    must decode successfully as an `EnvoyGatewayConfig` object. Unknown fields
    cause a validation error (strict decoding).
@@ -556,15 +565,17 @@ Warnings are advisory only; they never fail the admission request. This keeps
 the experimental-features risk visible at the point of use while leaving the
 choice with the shoot owner.
 
+### Lifecycle Management
+
 The extension interacts with Gardener's lifecycle protocol as follows:
 
 | Phase | Behaviour |
 |-------|-----------|
 | Reconcile | Creates/updates a `ManagedResource` in the shoot namespace on the seed with all shoot-cluster resources (Gateway API CRDs, Envoy Gateway CRDs, control plane Deployment, Service, RBAC, PDB, optional HPA/VPA, and the `envoy-gateway` `GatewayClass`). Waits for the `ManagedResource` to become healthy before marking the `Extension` as reconciled. |
-| Delete (extension disabled, shoot kept) | The `Delete` reconciler reads the `Cluster` resource and checks `cluster.Shoot.DeletionTimestamp`. When it is **nil** (shoot stays), the extension refuses to remove itself while user-owned `Gateway` objects still exist in the shoot (to prevent silent traffic loss). The admission webhook surfaces this as a validation error on the `Shoot` update. Once the user has cleaned up their `Gateway`/`*Route` objects, the `ManagedResource` is deleted and the extension waits up to 5 minutes for managed objects to disappear. |
+| Delete (extension disabled, shoot kept) | The `Delete` reconciler reads the `Cluster` resource and checks `cluster.Shoot.DeletionTimestamp`. When it is **nil** (shoot stays), the extension refuses to remove itself while any `Gateway` object still exists in the shoot (to prevent silent traffic loss). **Identifying user Gateways:** the extension only ever creates a `GatewayClass` (`envoy-gateway`) and a default `EnvoyProxy` — never a `Gateway` — so *every* `Gateway` in the shoot is by definition user-owned. The guard therefore needs no ownership heuristic: it lists all `Gateway` objects across every namespace via a shoot-scoped client and blocks while the list is non-empty. The user is expected to delete only their own `Gateway`/`*Route` objects; the extension-managed `GatewayClass` and `EnvoyProxy` are **not** deleted by hand — they are torn down automatically together with the `ManagedResource`. **Where the block surfaces:** this guard runs in the extension controller **on the seed**, not in an admission webhook. It returns an error from the `Delete` flow which is recorded on the `Extension` resource and propagated into the `Shoot`'s `.status.lastErrors` on the next reconciliation. (An admission webhook is not used for this because it cannot synchronously list shoot resources during a `Shoot` update; the webhook only validates the `Shoot` spec — purpose and `providerConfig`.) **Completion wait:** once no `Gateway` objects remain, the reconciler deletes the single `ManagedResource` and waits (up to `ManagedResourceDeletionTimeout`, currently 2 minutes) for `gardener-resource-manager` to finalize it. There are no managed objects *outside* the `ManagedResource`: GRM removes every object the `ManagedResource` carries and only then drops the `ManagedResource` finalizer, so waiting for the `ManagedResource` to disappear transitively guarantees all shoot-side objects are gone. The wait is derived purely from live state (does the `ManagedResource` still exist?), so it is idempotent — if the controller is interrupted and re-runs after the `ManagedResource` is already gone, `Delete` is a no-op and the wait returns immediately; no "must wait" flag is persisted anywhere. |
 | Delete (shoot deletion) | When `cluster.Shoot.DeletionTimestamp` is **non-nil**, the entire shoot is going away, so the "Gateways still exist" guard is bypassed — blocking would only leak the shoot. The extension's `Extension` resource is reconciled with `lifecycle.delete: BeforeKubeAPIServer`, so the `ManagedResource` (Envoy Gateway control plane, CRDs, the `envoy-gateway` `GatewayClass`, EnvoyProxy/HTTPRoute/Gateway instances) is torn down before the shoot's API server is removed. The cloud-provider `LoadBalancer` Services that were created for each `Gateway` are deleted as part of the shoot's normal `Service` cleanup, freeing the underlying load balancers. No manual cleanup of `Gateway` objects is required from the user. |
 | Heartbeat | Extension controller participates in the Gardener heartbeat protocol and reports liveness. |
-| Metrics | Prometheus metrics are exposed on port 8080 under `/metrics`; Gardener's monitoring stack can scrape them via `ServiceMonitor`. The Envoy data-plane and Envoy Gateway control plane also expose Prometheus metrics that are scraped via separate `ServiceMonitor` objects. |
+| Metrics | Port 8080 `/metrics` belongs to the **extension controller itself**, which runs in the seed (it is the reconciler — only the *data path* is absent from the seed, see [Deployment Topology](#deployment-topology-seed-vs-shoot)). These are operational metrics *about the reconciliation of `Extension` objects*, not shoot ingress traffic: the extension exposes `gardener_extension_envoy_gateway_actuator_operation_total`, `_actuator_operation_duration_seconds`, `_actuator_operation_errors_total`, and `_delete_guard_rejections_total` (all labelled by `cluster` and `operation`), plus the standard controller-runtime, workqueue, and Go-process metrics. Gardener's seed monitoring stack scrapes this endpoint via a `ServiceMonitor`. The Envoy Gateway control plane and Envoy data-plane also expose Prometheus metrics, but those are **shoot-local** — they are emitted by pods inside the shoot and scraped by the shoot's own monitoring, entirely separate from the seed-side extension-controller endpoint on 8080. |
 | VPA/HPA | Optional VPA and HPA manifests are provided for both the Envoy Gateway control plane and the Envoy data-plane pods in the shoot cluster (VPA enabled by default, HPA opt-in). The extension controller on the seed has its own VPA configuration (see [Extension Registration](#extension-registration)). |
 
 ### Coexistence with `shoot-traefik`
@@ -579,10 +590,14 @@ two extensions reconcile disjoint resources:
 | Traefik Deployment, IngressRoute CRDs | `shoot-traefik` |
 | Envoy Gateway Deployment, Gateway API CRDs, EnvoyProxy CRDs | `shoot-envoy-gateway` |
 
-There is no IP/port conflict at the `Service` level because each extension
-provisions its own `LoadBalancer` Service. Nonetheless, running both in
-parallel doubles the LB cost and the cognitive load; documentation will
-recommend choosing one path per shoot in production.
+There is no IP/port conflict, because the two paths never share a `Service`:
+`shoot-traefik` provisions its own `LoadBalancer` Service for the Traefik
+proxy, while under `shoot-envoy-gateway` a `LoadBalancer` Service is created
+per user `Gateway` by the Envoy Gateway control plane (see
+[Deployment Topology](#deployment-topology-seed-vs-shoot)) — the extension
+itself provisions none. The cost consideration is therefore conditional: a
+shoot that actually runs `Gateway` objects alongside Traefik ingress pays for
+both sets of load balancers.
 
 ### Scope Restriction: Evaluation Shoots Only
 
@@ -657,8 +672,15 @@ large route volumes.
   single Traefik process serves Gateways from multiple namespaces. This
   is essentially how most `Ingress` controllers operate and may be
   perfectly acceptable for single-team shoots, but it conflicts with
-  Gateway API's explicit namespace-isolation model and creates a
-  noisy-neighbour risk in multi-tenant scenarios.
+  Gateway API's explicit namespace-isolation model (a `Gateway`'s
+  [`spec.listeners[].allowedRoutes.namespaces`](https://gateway-api.sigs.k8s.io/docs/concepts/api-overview/#attaching-routes-to-gateways)
+  governs which namespaces may attach routes, and cross-namespace
+  backend references require an explicit
+  [`ReferenceGrant`](https://gateway-api.sigs.k8s.io/reference/api-types/referencegrant/);
+  see the upstream
+  [cross-namespace routing guide](https://gateway-api.sigs.k8s.io/guides/user-guides/multiple-ns/)
+  and the [security model](https://gateway-api.sigs.k8s.io/docs/concepts/security/#crossing-namespace-boundaries))
+  and creates a noisy-neighbour risk in multi-tenant scenarios.
 * **Status reporting**: ~180 seconds latency to reflect status on large route
   sets — slow enough to cause timeouts or prolonged sync delays in GitOps
   tooling (Argo CD, Flux) that waits for `Ready` conditions.
@@ -826,8 +848,7 @@ them.
 
 * **Promote out of `purpose: evaluation`.** Once the extension has soaked in
   evaluation shoots and the upstream Envoy Gateway memory-leak issue is
-  resolved, the admission-webhook restriction will be relaxed to allow
-  `development` and `production` shoots.
+  resolved, the admission-webhook restriction will be removed.
 
 * **Feature gates** for opt-in experimental Gateway API features
   (`TCPRoute`, `BackendTLSPolicy`, mesh GAMMA bindings) without requiring a
