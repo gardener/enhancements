@@ -100,6 +100,17 @@ If applicable, the ServiceAccount token issuer configuration must be updated as 
 - tight coupling between DNS management and CA rotation
 
 ## Alternatives
+
+### Options for Authorizing Shoot Domain Changes
+
+This GEP proposes to introduce a new RBAC verb to protect domain configuration from modifications by the owners. Here are valid alternatives:
+
+1. **No Dedicated Restriction**: Rely solely on the mandatory simultaneous CA rotation as the guard, and let anyone with permission to update the Shoot change the domains.
+2. **Global Configuration**: Use a global configuration option instead of a permission to allow/disallow the modification of the domain configuration on the shoot level in the entire Gardener installation.
+
+### Other Alternatives
+
+The following alternatives were considered as not applicable:
 - **Manual Migration**: High risk of downtime and configuration errors.
 - **Separate Rotation Resource**: Over-complicates the user experience compared to extending the already existing CA rotation mechanism.
 - **Automatic CA Rotation on Domain Change**: A CA rotation has impact well beyond DNS. Requiring the annotation keeps users explicitly in control of a disruptive operation and guards against accidental/unintended domain changes silently triggering a full rotation.
