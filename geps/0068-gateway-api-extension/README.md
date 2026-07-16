@@ -69,23 +69,16 @@ registration, `ManagedResource`-based deployment, admission webhooks) and is
 deliberately scoped narrowly: it manages (installs and updates) the Gateway
 API CRDs in the shoot, deploys the Envoy Gateway control plane and the Envoy
 data-plane proxies, and installs a `GatewayClass` named `envoy-gateway` that
-shoot owners can reference from their `Gateway` and `*Route` objects. (The
-upstream Envoy Gateway Helm chart does not ship a `GatewayClass`; the
-extension creates one, using the controller name
-`gateway.envoyproxy.io/gatewayclass-controller`.)
+shoot owners can reference from their `Gateway` and `*Route` objects.
 
 In line with the Gardener
 [component checklist](https://github.com/gardener/gardener/blob/master/docs/development/component-checklist.md),
 the extension does **not** render the upstream Envoy Gateway Helm chart to
-deploy the shoot-cluster workload. All shoot resources (the control plane
-`Deployment`, `Service`, RBAC, `PodDisruptionBudget`, `NetworkPolicy`, etc.)
-are authored as Go types and delivered through a `ManagedResource`. Only the
-Gateway API and Envoy Gateway CRDs — and the `GatewayClass`/`EnvoyProxy`
-objects — are carried as embedded (`go:embed`) raw YAML, to avoid pulling the
-`sigs.k8s.io/gateway-api` and `gateway.envoyproxy.io` types into the
-extension's runtime scheme. The only Helm charts in the extension are the
-standard Gardener packaging for the extension controller and its admission
-webhook (see [Extension Registration](#extension-registration)).
+deploy the shoot-cluster workload; all shoot resources are authored as Go
+types and delivered through a `ManagedResource`. Only the CRDs and the
+`GatewayClass`/`EnvoyProxy` objects are carried as embedded (`go:embed`) raw
+YAML. The details, and the reason for the CRD exception, are in
+[Notes/Constraints/Caveats](#notesconstraintscaveats).
 
 
 ## Motivation
@@ -155,11 +148,10 @@ Key problems this GEP addresses:
 
 1. Introduce `gardener-extension-shoot-envoy-gateway` as an extension in the
    [Gardener GitHub organisation](https://github.com/gardener).
-2. Ship **Envoy Gateway** as the bundled Gateway API implementation. The
-   extension installs a `GatewayClass` named `envoy-gateway` bound to the
-   Envoy Gateway controller (`gateway.envoyproxy.io/gatewayclass-controller`);
-   the upstream Envoy Gateway Helm chart does not ship a `GatewayClass`
-   itself, so the extension is responsible for creating one. Shoot users
+2. Ship **Envoy Gateway** as the bundled Gateway API implementation. Because
+   the upstream Envoy Gateway Helm chart does not ship a `GatewayClass`, the
+   extension installs one named `envoy-gateway` bound to the Envoy Gateway
+   controller (`gateway.envoyproxy.io/gatewayclass-controller`). Shoot users
    reference it from their `Gateway` resources via
    `spec.gatewayClassName: envoy-gateway`.
 3. Install (or reconcile) the Gateway API standard channel CRDs
@@ -254,7 +246,7 @@ component the extension is responsible for and the cluster it ends up in.
 | Gateway API CRDs | Shoot | Standard channel `gateway.networking.k8s.io/v1`; optionally experimental channel. Delivered via `ManagedResource`. |
 | Envoy Gateway CRDs (`EnvoyProxy`, `BackendTrafficPolicy`, `ClientTrafficPolicy`, `SecurityPolicy`, …) | Shoot | Required for the Envoy Gateway control plane to function. |
 | Envoy Gateway **control plane** (Deployment, Service, RBAC, PDB, optional VPA/HPA) | Shoot | Runs as Pods inside the shoot. Translates `Gateway`/`*Route` resources into Envoy xDS configuration. |
-| `GatewayClass` (`envoy-gateway`) | Shoot | Created by this extension via `ManagedResource`. Bound to controller `gateway.envoyproxy.io/gatewayclass-controller`. The upstream Envoy Gateway Helm chart does not ship a `GatewayClass`, so the extension provides one. |
+| `GatewayClass` (`envoy-gateway`) | Shoot | Created by this extension via `ManagedResource`. Bound to controller `gateway.envoyproxy.io/gatewayclass-controller`. |
 | Envoy **data plane** (proxy Pods) | Shoot | Spawned by the Envoy Gateway control plane in response to user-created `Gateway` objects. Each `Gateway` gets its own Envoy Deployment + Service inside the shoot. |
 | LoadBalancer `Service` per `Gateway` | Shoot | Provisioned by the cloud-provider load-balancer controller running inside the shoot, exactly like an `Ingress`-mode LB today. |
 
@@ -287,15 +279,10 @@ Gateway API and the other candidates because of:
   in [CNCF](https://www.cncf.io/), with multi-vendor maintainers — no
   single-vendor lock-in.
 
-Traefik Gateway API was a strong runner-up but rejected for two concrete
-reasons documented in the upstream benchmark:
-
-1. It consolidates Gateways across namespaces into a shared data-plane
-   process, which violates the Gateway API spec's namespace isolation
-   expectations and creates a noisy-neighbour risk in multi-tenant shoots.
-2. Its status reporting is slow (~180 seconds for status updates on large
-   route sets) and it fails to apply large route volumes — both
-   deal-breakers for shoots with many application teams.
+Traefik Gateway API was a strong runner-up but rejected on architectural
+correctness in multi-tenant scenarios, slow status reconciliation, and
+benchmarked failures with large route volumes — see
+[Why Envoy Gateway Over Traefik Gateway API](#why-envoy-gateway-over-traefik-gateway-api).
 
 ### Notes/Constraints/Caveats
 
@@ -311,7 +298,11 @@ reasons documented in the upstream benchmark:
   `spec.experimentalFeatures: true` in the extension's provider config
   (`spec.extensions[].providerConfig` on the Shoot, see [API](#api)).
   Operators should be aware that experimental APIs may change in
-  backwards-incompatible ways.
+  backwards-incompatible ways. To make this risk visible at the point of
+  use, the admission webhook returns a non-fatal **warning** on every
+  `Shoot` create/update that opts into `experimentalFeatures: true` (see
+  [Admission Webhook](#admission-webhook)); `kubectl` surfaces it inline
+  without blocking the operation.
 
 * **Envoy Gateway CRDs (e.g. `EnvoyProxy`, `BackendTrafficPolicy`,
   `ClientTrafficPolicy`, `SecurityPolicy`) are also installed.** These are
@@ -320,9 +311,8 @@ reasons documented in the upstream benchmark:
 
 * **`GatewayClass` is `envoy-gateway`.** The extension installs a single
   `GatewayClass` named `envoy-gateway` bound to controller
-  `gateway.envoyproxy.io/gatewayclass-controller`. The upstream Envoy Gateway
-  Helm chart does not create a `GatewayClass` on its own, so the extension is
-  responsible for it. Users reference it from their `Gateway` objects via
+  `gateway.envoyproxy.io/gatewayclass-controller` (see [Goals](#goals)). Users
+  reference it from their `Gateway` objects via
   `spec.gatewayClassName: envoy-gateway`.
 
 * **Shoot resources are authored as Go types, not Helm.** Following the
@@ -355,7 +345,7 @@ reasons documented in the upstream benchmark:
 | Gateway API CRD conflicts if user pre-installed them | Low | High | CRDs are part of the shoot `ManagedResource` and applied via server-side apply; existing CRDs are updated idempotently without field-ownership conflicts. The extension's CRD reconciliation is opt-out via `spec.manageCRDs: false` for users who manage CRDs themselves. |
 | Limited annotation/feature parity with NGINX or Traefik Ingress | High | Medium | Documented migration guide: most NGINX `Ingress` annotations have a direct `HTTPRoute` filter or Envoy `BackendTrafficPolicy` equivalent. Users requiring features not yet expressible in standard Gateway API are advised to remain on the Traefik extension until the experimental channel covers their case. |
 | Operators end up with three concurrent ingress paths in one shoot (legacy NGINX, Traefik, Gateway API) | Medium | Medium | Documentation strongly recommends a single ingress path per shoot in production. The evaluation-purpose scope of both extensions limits the blast radius during the rollout phase. |
-| Ecosystem churn: Gateway API evolves rapidly (v1.5 as of early 2026, v1.6 in progress) | High | Low | The extension declares conformance against a specific Gateway API release in its release notes and bumps deliberately, not automatically. |
+| Ecosystem churn: Gateway API evolves rapidly (v1.5 as of early 2026, v1.6 in progress) | High | Low | The extension declares conformance against a specific Gateway API release in its release notes and bumps deliberately, not automatically. When a shoot opts into the experimental channel, the admission webhook additionally emits a non-fatal warning on create/update flagging the backwards-incompatibility risk (see [Admission Webhook](#admission-webhook)). |
 
 
 ## Design Details
@@ -546,7 +536,25 @@ A `ValidatingWebhookConfiguration` is registered at path
    `spec.dataPlaneReplicas` must be ≥ 1; `spec.logLevel` must be one of the
    accepted enum values.
 
-### Lifecycle Management
+Beyond hard rejections, the webhook also emits **non-fatal warnings** via the
+`AdmissionResponse.warnings` field (surfaced inline by `kubectl` and other
+clients on create/update, without blocking the request):
+
+* **Experimental channel opt-in**: When `spec.experimentalFeatures: true` is
+  set, the webhook warns that the experimental-channel Gateway API CRDs
+  (`TCPRoute`, `TLSRoute`, `UDPRoute`, `BackendTLSPolicy`) may change in
+  backwards-incompatible ways between releases, so that shoot owners are
+  reminded of the stability trade-off every time they apply the manifest —
+  not just when they first read the docs.
+* **Coexisting ingress paths**: When both `shoot-traefik` and
+  `shoot-envoy-gateway` are enabled on the same shoot, the webhook warns
+  about the doubled load-balancer cost and recommends a single ingress path
+  per shoot in production (see
+  [Coexistence with `shoot-traefik`](#coexistence-with-shoot-traefik)).
+
+Warnings are advisory only; they never fail the admission request. This keeps
+the experimental-features risk visible at the point of use while leaving the
+choice with the shoot owner.
 
 The extension interacts with Gardener's lifecycle protocol as follows:
 
@@ -839,13 +847,12 @@ them.
   hand-writing `EnvoyProxy` objects or per-`Gateway`
   `spec.infrastructure.annotations`.
 
-* **First-class GAMMA (service mesh) support.** East-west mesh routing is
-  standard-channel Gateway API since v1.1.0 (see [Non-Goals](#non-goals)),
-  and the route CRDs it uses are already installed by this extension. A
-  future iteration could integrate a mesh data plane (for example Envoy
-  Gateway's mesh mode or a co-located ambient mesh) so shoot owners can
-  attach `HTTPRoute`/`GRPCRoute` objects directly to `Service` resources —
-  without operators having to install and run a separate mesh themselves.
+* **First-class GAMMA (service mesh) support.** A future iteration could
+  integrate a mesh data plane (for example Envoy Gateway's mesh mode or a
+  co-located ambient mesh) so shoot owners can attach `HTTPRoute`/`GRPCRoute`
+  objects directly to `Service` resources without operators having to install
+  and run a separate mesh. Why this is out of scope today is covered in
+  [Non-Goals](#non-goals).
 
 * **Migration tooling.** A helper command (`gardenctl ingress-to-gateway`)
   that converts NGINX-style `Ingress` and Traefik `IngressRoute` objects
@@ -909,47 +916,45 @@ observability hooks), and there is no curated, supported default. **Rejected.**
 ### 2. Pick Traefik Gateway API for Operational Reuse
 
 The argument: GEP-57 already ships Traefik; ship the same binary in Gateway
-API mode and consolidate operational knowledge. **Rejected** for the
-reasons spelled out in
-[Why Envoy Gateway Over Traefik Gateway API](#why-envoy-gateway-over-traefik-gateway-api):
-tenant-isolation violations, slow status reconciliation, and scale failures.
+API mode and consolidate operational knowledge. **Rejected** for the reasons
+in [Why Envoy Gateway Over Traefik Gateway API](#why-envoy-gateway-over-traefik-gateway-api)
+(tenant-isolation violations, slow status reconciliation, scale failures);
+see also candidate [Traefik Gateway API](#2-traefik-gateway-api).
 
 ### 3. Pick Istio for Best Conformance
 
 The argument: Istio's Gateway API is the most mature and stable in the
-upstream benchmark. **Rejected** because it requires installing a full
-service mesh (sidecars, mesh control plane, mTLS infrastructure) into
-every shoot that wants Gateway API ingress. The operational footprint is
-disproportionate. Operators who already run Istio for mesh purposes can
-add an `istio` `GatewayClass` independently.
+upstream benchmark. **Rejected** on operational footprint — it requires a full
+service mesh in every shoot that only wants Gateway API ingress. Details under
+candidate [Istio Ingress Gateway](#3-istio-ingress-gateway-with-gateway-api).
 
 ### 4. Pick Kgateway for Best Performance
 
-The argument: ~400k qps, clean architecture, no reported correctness
-issues. **Rejected** because Kgateway is a recently-renamed CNCF sandbox
-project. Sandbox is too early for a default Gardener shipping decision.
-Reconsidered as a future enhancement once it graduates to incubation.
+The argument: highest throughput of the field, clean architecture, no reported
+correctness issues. **Rejected** because Kgateway is a recently-renamed CNCF
+sandbox project — too early for a default. Reconsidered as a future
+enhancement once it graduates; see candidate
+[Kgateway](#4-kgateway-formerly-gloo-gateway-k8sgateway).
 
 ### 5. Cilium Gateway API for CNI Co-location
 
-The argument: shoots using Cilium as CNI could collapse CNI and Gateway
-into a single component. **Rejected** because of the upstream benchmark's
-performance numbers (~22k qps) and the silent-failure behaviour beyond
-1.5mb of configuration. These are blocking for production shoots.
+The argument: shoots using Cilium as CNI could collapse CNI and Gateway into a
+single component. **Rejected** on the benchmarked performance and
+silent-configuration-failure behaviour detailed under candidate
+[Cilium Gateway API](#5-cilium-gateway-api).
 
 ### 6. NGINX Gateway Fabric for "Familiar" NGINX Branding
 
-The argument: continuity for users coming from Ingress NGINX. **Rejected.**
-NGINX Gateway Fabric is a separate codebase from the retired
-`ingress-nginx`, so there is no continuity in practice — and the upstream
-benchmark numbers put it 3.5–4.5x below the Envoy-based front-runners and
-report that it crashes during route changes.
+The argument: continuity for users coming from Ingress NGINX. **Rejected** —
+it is a separate codebase from the retired `ingress-nginx` (no real
+continuity), and the benchmark flags both low throughput and crashes during
+route changes. See candidate [NGINX Gateway Fabric](#7-nginx-gateway-fabric).
 
 ### 7. Kong Gateway
 
-**Rejected** on the namespace consolidation issue (same multi-tenant
-isolation problem as Traefik) plus incorrect route-count reporting,
-both flagged in the upstream benchmark.
+**Rejected** on the same multi-tenant namespace-consolidation issue as Traefik
+plus incorrect route-count reporting. See candidate
+[Kong Gateway](#6-kong-gateway).
 
 ### 8. Use Gateway API CRDs Without a Bundled Implementation
 
