@@ -108,6 +108,23 @@ This GEP proposes to introduce a new RBAC verb to protect domain configuration f
 1. **No Dedicated Restriction**: Rely solely on the mandatory simultaneous CA rotation as the guard, and let anyone with permission to update the Shoot change the domains.
 2. **Global Configuration**: Use a global configuration option instead of a permission to allow/disallow the modification of the domain configuration on the shoot level in the entire Gardener installation.
 
+### Disable the Internal Domain per Seed (Without Domain Mutability)
+
+A narrower variant of this GEP's idea would be to supports only **enabling/disabling the internal domain at the Seed level** and to drop domain mutability entirely — neither the internal nor the external domain of a Shoot can be changed. This covers the motivating use case (proxy-API setups such as STACKIT Kubernetes Engine, where the environment fully controls the external domain and the internal domain is not needed) without introducing mutable domains.
+
+There is no per-Shoot internal-domain concept today. The internal domain is configured landscape-wide (a single `internal-domain` secret in the garden namespace) with an optional per-Seed override (`Seed.spec.dns.internal`); the finest existing granularity is per-Seed. The motivating use case is scoped to a whole environment/Seed anyway, and `Seed` resources are already restricted to operators, so no custom RBAC verb is required.
+
+**Implementation Idea**
+- The Seed spec gains a way to indicate that no internal domain should be used (for example an `enabled` flag on the internal DNS configuration).
+- Disabling on the Seed does **not** automatically trigger CA rotations. The operator disables the internal domain and notifies Shoot owners to trigger a CA rotation.
+- Each existing Shoot drops its internal domain at its next CA rotation: the obsolete internal DNS record is removed, the internal domain is removed from the API server certificate SANs, and kubeconfigs/kubelet configuration switch to the external domain. Newly created Shoots on such a Seed never receive an internal domain.
+- **Precondition:** the internal domain may only be disabled if every Shoot on the Seed has a valid external domain, so each Shoot keeps at least one valid domain.
+- The ServiceAccount-issuer consequence still applies: for Shoots on the default issuer (derived from the internal domain), disabling forces the issuer to change to the external-domain-based address, with the same `acceptedIssuers` handling and external-federation caveat as in the main proposal.
+
+**Trade-offs:**
+- **Pro:** significantly simpler — no per-Shoot API field, no internal-domain list on the Seed, no migration bookkeeping, and no custom RBAC verb.
+- **Con:** covers only the "remove the internal domain for a whole environment" use case; it cannot change a domain, nor disable the internal domain for individual Shoots.
+
 ### Other Alternatives
 
 The following alternatives were considered as not applicable:
