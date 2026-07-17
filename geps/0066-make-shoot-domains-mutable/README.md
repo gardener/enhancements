@@ -8,9 +8,9 @@ Every Gardener environment requires at least one DNS zone for managing "internal
 
 Currently, an existing shoot's internal domain cannot be changed. Although, in real life, there are several cases, where domain names need to be changed also for existing shoots, for example because of a wrong configuration in the first place, or due to compliance reasons.
 
-Some Gardener setups don't grant users access to the Shoot API, but offer a different ("proxy") API (e.g., STACKIT Kubernetes Engine). In those setups, the environment has full control over the external domain. As it is not configurable by the shoot owners, the environment can make sure, that the external domain is valid and available. Having an internal domain in such an environment is not strictly necessary, at least not in behalf of robustness and availability. 
+Some Gardener setups don't grant users access to the Shoot API, but offer a different ("proxy") API (e.g., STACKIT Kubernetes Engine). In those setups, the environment has full control over the external domain. As it is not configurable by the shoot owners, the environment can make sure, that the external domain is valid and available. Having an internal domain in such an environment is not strictly necessary, at least not in behalf of robustness and availability.
 
-As the internal domain is currently configured per seed, all shoots on a seed share the same internal domain zone. Consequently, if that zone is public, a shoot's internal domain will be publicly exposed, even if the shoot resides in a private network zone. 
+As the internal domain can currently only be configured down to the seed level, all shoots on a seed share the same internal domain zone. Consequently, if that zone is public, a shoot's internal domain will be publicly exposed, even if the shoot resides in a private network zone.
 
 A native way to manage these domains would improve the user experience for all of the described cases. Internal and external domains should be mutable, the internal domain should even be optional in cases, where the external domain is sufficient.
 
@@ -35,7 +35,7 @@ Because the internal and external domains are part of a Shoot's network setup, t
 - An authorized user modifies the domain configuration in the Shoot spec according to their needs **AND** adds the annotation `gardener.cloud/operation=rotate-ca-start` to trigger the migration.
 - The two-phase CA rotation is started.
 - In the `PREPARING` phase, the DNS records for new domain names are created and appended to the server certificates, while the old domain names are still kept in place to allow a seamless transition. The new internal domain is prepended to `status.internalDomains`, so both the new (first) and the old internal domain are recorded as in use. If the Shoot uses the default ServiceAccount token issuer — which is derived from the internal domain — the new issuer becomes the primary one (used to mint new tokens), and the old issuer is added to the kube-apiserver's `serviceAccountConfig.acceptedIssuers`, so tokens already issued with the old `iss` claim remain valid during the transition.
-- When the `PREPARED` phase is reached, the cluster is available through its new domain names. This must be checked, additionally to all the new credentials.
+- When the `PREPARED` phase is reached, the cluster is available through its new domain names. This must be checked, in addition to all the new credentials.
 - In the `COMPLETING` phase, the obsolete DNS records are deleted and the corresponding domains are removed from the server certificates. The obsolete internal domain is removed from `status.internalDomains`, leaving only the new one. Likewise, the old issuer is removed from the kube-apiserver's `serviceAccountConfig.acceptedIssuers` (see `PREPARING`). Note that bound/projected tokens refresh automatically, but legacy long-lived secret-based tokens carrying the old issuer would then be invalidated.
 
 Adding the triggering annotation in the same step as the actual domain modifications is mandatory.
@@ -45,7 +45,7 @@ To make the internal domain optional, introduce the flag `spec.dns.internalDomai
 If the internal domain is disabled for a Shoot, its external domain is used in all places where the internal domain was used before, instead.
 
 ### Migration Mechanism for Entire Seeds
-For cases where all Shoots on a Seed are affected (for example because of compliance requirements), introduce a way to provide the changed domain configuration through the Seed spec. 
+For cases where all Shoots on a Seed are affected (for example because of compliance requirements), introduce a way to provide the changed domain configuration through the Seed spec.
 
 Since the CA rotation is a process that must be executed in a planned manner, adding the changed information to the Seed spec must not automatically trigger the CA rotation for the affected Shoots.
 
@@ -53,21 +53,21 @@ Since the CA rotation is a process that must be executed in a planned manner, ad
 - The operator modifies the list of valid internal domains in the Seed spec according to their needs **AND** notifies all Shoot owners that they should trigger a CA rotation.
 - Whenever a CA rotation is triggered for a specific Shoot on this Seed, the internal domain of this Shoot is migrated to the first entry in the Seed's list of valid internal domains.
 
-Therefore the Seed API is extended to provide a list of internal domains instead of a single value. The first entry in this list is the one that must be applied to new or reconciled Shoots, while the other entries are also valid. This pattern is already used in other places.
+Therefore the Seed API is extended to provide a list of internal domains instead of a single value. The first entry in this list is the one that must be applied to newly created shoots or shoots undergoing a CA rotation, while the other entries are also valid. This pattern is already used in other places.
 
 Disabling the internal domains of all Shoots on a Seed is out of scope, this can only be done through the Shoot API.
 
 ### Securing Control Over the Domain Configuration
-Only operators must be able to modify the domain configuration of a Shoot. Therefore, a new custom RBAC verb named `modify-spec-domains` is introduced, which protects the `Shoot.spec.dns.internalDomain` field, similar to the [`modify-spec-tolerations-whitelist`](https://github.com/gardener/gardener/blob/0025fc1765c6fdb9106249bb1754108acedb4362/docs/concepts/apiserver-admission-plugins.md#customverbauthorizer).
+Only operators must be able to modify the domain configuration of a Shoot. Therefore, a new custom RBAC verb named `modify-spec-domains` is introduced, which protects the fields related to the domains, similar to the `modify-spec-tolerations-whitelist` and `mark-self-hosted` verbs provided through the  [`CustomVerbAuthorizer`](https://github.com/gardener/gardener/blob/0025fc1765c6fdb9106249bb1754108acedb4362/docs/concepts/apiserver-admission-plugins.md#customverbauthorizer).
 
-The domain configuration on the Seed level is already restricted to operators.
+The domain configuration on the Seed level can already only be modified by operators.
 
 ### Risks and Mitigations
 
 | Risk | Likelihood | Impact | Mitigation |
 | --- | --- | --- | --- |
-| Worker nodes are unavilable due to broken domain name resolution. | Low | High | The old DNS records and certificate SANs are kept during the first phase of the CA rotation ("prepare"). Only when all worker nodes are rolled and available under the new domain configuration, the obsolete DNS records and certificate SANs are removed. |
-| The domain configuration is inconsistent or invalid. | Low | High | The validation enforces that each Shoot has at least one valid domain. The CA rotation is only triggered, if the domain configuration is consitent and valid. |
+| Worker nodes are unavailable due to broken domain name resolution. | Low | High | The old DNS records and certificate SANs are kept during the first phase of the CA rotation ("prepare"). Only when all worker nodes are rolled and available under the new domain configuration, the obsolete DNS records and certificate SANs are removed. |
+| The domain configuration is inconsistent or invalid. | Low | High | The validation enforces that each Shoot has at least one valid domain. The CA rotation is only triggered, if the domain configuration is consistent and valid. |
 | Any user that has access to the Shoot resource can modify a cluster's internal or external domain. | Mid | High | A new custom RBAC verb is introduced, which is only granted to the `gardener.cloud:admin` role. The verb is checked every time a modification of the domain configuration in a Shoot spec is detected. Unauthorized modifications are rejected. |
 | An operator removes an internal domain from a Seed that is still in use by Shoots. | Low | High | Seed admission rejects removing an internal domain that any Shoot on the Seed still records in `status.internalDomains`. |
 
@@ -92,7 +92,7 @@ If applicable, the ServiceAccount token issuer configuration must be updated as 
 ### Validation
 - ensure a Shoot has at least one valid domain (either internal or external)
 - enforce that domain changes only occur in the same API request that prepares a CA rotation
-- reject removing an internal domain from a Seed's list while it is still in use, i.e. while any Shoot scheduled on that Seed still lists it in `status.internalDomains`. This mirrors the existing `ValidateDefaultDomainsChangeForSeed` check for default (external) domains in the Seed validator admission plugin.
+- reject removing an internal domain from a Seed's list while it is still in use, i.e. while any Shoot scheduled on that Seed still lists it in `status.internalDomains`. This mirrors the existing `ValidateDefaultDomainsChangeForSeed` check for default (external) domains in the Seed validator admission plugin and concerns also the checks in `ValidateInternalDomainChangeForSeed`.
 - the `ShootDNS` admission plugin might be a good fit
 
 ## Drawbacks
@@ -119,7 +119,7 @@ There is no per-Shoot internal-domain concept today. The internal domain is conf
 - Disabling on the Seed does **not** automatically trigger CA rotations. The operator disables the internal domain and notifies Shoot owners to trigger a CA rotation.
 - Each existing Shoot drops its internal domain at its next CA rotation: the obsolete internal DNS record is removed, the internal domain is removed from the API server certificate SANs, and kubeconfigs/kubelet configuration switch to the external domain. Newly created Shoots on such a Seed never receive an internal domain.
 - **Precondition:** the internal domain may only be disabled if every Shoot on the Seed has a valid external domain, so each Shoot keeps at least one valid domain.
-- The ServiceAccount-issuer consequence still applies: for Shoots on the default issuer (derived from the internal domain), disabling forces the issuer to change to the external-domain-based address, with the same `acceptedIssuers` handling and external-federation caveat as in the main proposal.
+- The ServiceAccount-issuer consequence still applies: for Shoots on the default issuer (derived from the internal domain), disabling forces the issuer to change to the external-domain-based address, with the same `acceptedIssuers` handling as described in the main proposal.
 
 **Trade-offs:**
 - **Pro:** significantly simpler — no per-Shoot API field, no internal-domain list on the Seed, no migration bookkeeping, and no custom RBAC verb.
