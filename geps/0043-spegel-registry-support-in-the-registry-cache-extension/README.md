@@ -145,7 +145,7 @@ When `spegel` is starting, it gets the bootstrap peers from the `bootstrapper` a
 
 Let `kubelet1` on Node1 pull an image. It sends a CRI PullImage request to `containerd1`. Then `containerd1` checks the mirror configuration in `hosts.toml` and sends a request to the local `spegel1` registry. The image doesn't exists on any node, so 404 NotFound is returned. The `containerd1` then pulls the image from the upstream and fires `/images/create` and `/content/create` events. Events are processed by `spegel1` and it is added as a content provider to the DHT for the image.
 Let `kubelet2` on Node2 pull the same image. In this case, `spegel2` looks up the image content in the DHT and finds that the content is available on Node1. It then fetches the contents from the `spegel1` registry on Node1 and streams it directly into the response to `containerd2`. The `containerd2` then fires the image events and `spegel2` added itself as a content provider to the DHT.
-Finally, let `kubelet<N>` on Node<N> pull the same image. Here, when `spegel<N>` looks for content, it finds that it is available on Node1 and Node2. It will then fetch some layers from Node1 and some from Node2.
+Finally, let `kubelet<N>` on `Node<N>` pull the same image. Here, when `spegel<N>` looks for content, it finds that it is available on Node1 and Node2. It will then fetch some layers from Node1 and some from Node2.
 
 ### Spegel Binary and Systemd Unit
 
