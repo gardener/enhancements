@@ -23,8 +23,8 @@ The extension follows the standard Gardener extension contract (controller
 registration, `ManagedResource`-based deployment, admission webhooks) and is
 deliberately scoped narrowly: it manages (installs and updates) the Gateway
 API CRDs in the shoot, deploys the Envoy Gateway control plane and the Envoy
-data-plane proxies, and installs a `GatewayClass` named `envoy-gateway` that
-shoot owners can reference from their `Gateway` and `*Route` objects.
+data-plane proxies, and installs a `GatewayClass` named `gardener-envoy-gateway`
+that shoot owners can reference from their `Gateway` and `*Route` objects.
 
 In line with the Gardener
 [component checklist](https://github.com/gardener/gardener/blob/master/docs/development/component-checklist.md),
@@ -105,10 +105,10 @@ Key problems this GEP addresses:
    [Gardener GitHub organisation](https://github.com/gardener).
 2. Ship **Envoy Gateway** as the bundled Gateway API implementation. Because
    the upstream Envoy Gateway Helm chart does not ship a `GatewayClass`, the
-   extension installs one named `envoy-gateway` bound to the Envoy Gateway
-   controller (`gateway.envoyproxy.io/gatewayclass-controller`). Shoot users
-   reference it from their `Gateway` resources via
-   `spec.gatewayClassName: envoy-gateway`.
+   extension installs one named `gardener-envoy-gateway` bound to the Envoy
+   Gateway controller (`gateway.envoyproxy.io/gatewayclass-controller`). Shoot
+   users reference it from their `Gateway` resources via
+   `spec.gatewayClassName: gardener-envoy-gateway`.
 3. Install (or reconcile) the Gateway API standard channel CRDs
    (`gateway.networking.k8s.io/v1`) in the shoot cluster.
 4. Integrate with Gardener's standard resource-management, observability,
@@ -157,8 +157,8 @@ Key problems this GEP addresses:
    [Future Enhancements](#future-enhancements).
 4. This GEP does **not** introduce multiple competing `GatewayClass`
    objects. The extension installs a single `GatewayClass` named
-   `envoy-gateway` bound to the Envoy Gateway controller. Users may install
-   additional `GatewayClass` objects pointing at other implementations
+   `gardener-envoy-gateway` bound to the Envoy Gateway controller. Users may
+   install additional `GatewayClass` objects pointing at other implementations
    independently of this extension.
 5. This GEP does **not** cover network policy, mTLS automation, or
    advanced traffic policies (rate limiting, JWT auth, WAF), nor automated
@@ -192,7 +192,7 @@ When enabled on a Shoot, the extension:
 1. Reconciles `ManagedResource` objects in the shoot's control plane namespace
    on the seed. The `gardener-resource-manager` then applies the contained
    manifests into the shoot cluster (CRDs, RBAC, the Envoy Gateway control plane
-   Deployment, the `envoy-gateway` `GatewayClass`, etc.).
+   Deployment, the `gardener-envoy-gateway` `GatewayClass`, etc.).
 2. Registers an admission webhook that validates `Shoot` objects enabling the
    extension to enforce the evaluation-purpose scope constraint and to
    validate the `EnvoyGatewayConfig` provider config.
@@ -226,7 +226,7 @@ flowchart TB
     subgraph shoot["Shoot cluster"]
         subgraph applied["Applied by ManagedResource"]
             crds["Gateway API CRDs (standard + optional experimental)<br/>Envoy Gateway CRDs (EnvoyProxy, *Policy)"]
-            gwClass["GatewayClass: envoy-gateway<br/>(+ default EnvoyProxy)"]
+            gwClass["GatewayClass: gardener-envoy-gateway<br/>(+ default EnvoyProxy)"]
             cp["Envoy Gateway control plane<br/>Deployment, Service, RBAC, PDB, VPA/HPA<br/>xDS server :18000"]
         end
         gw["Gateway + *Route objects<br/>(created by shoot owner)"]
@@ -256,7 +256,7 @@ flowchart TB
 | Gateway API CRDs | Shoot | Standard channel `gateway.networking.k8s.io/v1`; optionally experimental channel. Delivered via `ManagedResource`. |
 | Envoy Gateway CRDs (`EnvoyProxy`, `BackendTrafficPolicy`, `ClientTrafficPolicy`, `SecurityPolicy`, …) | Shoot | Required for the Envoy Gateway control plane to function. |
 | Envoy Gateway **control plane** (Deployment, Service, RBAC, PDB, optional VPA/HPA) | Shoot | Runs as Pods inside the shoot. Translates `Gateway`/`*Route` resources into Envoy xDS configuration. |
-| `GatewayClass` (`envoy-gateway`) | Shoot | Created by this extension via `ManagedResource`. Bound to controller `gateway.envoyproxy.io/gatewayclass-controller`. |
+| `GatewayClass` (`gardener-envoy-gateway`) | Shoot | Created by this extension via `ManagedResource`. Bound to controller `gateway.envoyproxy.io/gatewayclass-controller`. |
 | Envoy **data plane** (proxy Pods) | Shoot | Spawned by the Envoy Gateway control plane in response to user-created `Gateway` objects. Each `Gateway` gets its own Envoy Deployment + `Service` in the shoot. |
 | LoadBalancer `Service` per `Gateway` | Shoot (object); LB provisioned from the control plane | The `Service` object lives in the shoot and is created **implicitly** by the Envoy Gateway control plane when it reconciles a `Gateway` — the extension does not provision it. The backing cloud load balancer is provisioned by the shoot's `cloud-controller-manager`, which runs in the shoot's control plane on the seed, exactly like an `Ingress`-mode LB today. |
 
@@ -300,8 +300,8 @@ plane in the shoot makes the xDS link shoot-local.
 
 Following the evaluation in [Evaluation of Gateway API Implementations](#evaluation-of-gateway-api-implementations),
 the extension ships **Envoy Gateway** as the implementation behind the
-`envoy-gateway` `GatewayClass`. Envoy Gateway was selected over Traefik
-Gateway API and the other candidates because of:
+`gardener-envoy-gateway` `GatewayClass`. Envoy Gateway was selected over
+Traefik Gateway API and the other candidates because of:
 
 * **Performance**: ~325k qps in the upstream
   [gateway-api-bench](https://github.com/howardjohn/gateway-api-bench) at 512
@@ -357,11 +357,11 @@ benchmarked failures with large route volumes — see
   `Gateway` object. The cluster-scoped CRDs and `GatewayClass` are, by
   definition, not namespaced.
 
-* **`GatewayClass` is `envoy-gateway`.** The extension installs a single
-  `GatewayClass` named `envoy-gateway` bound to controller
+* **`GatewayClass` is `gardener-envoy-gateway`.** The extension installs a
+  single `GatewayClass` named `gardener-envoy-gateway` bound to controller
   `gateway.envoyproxy.io/gatewayclass-controller` (see [Goals](#goals)). Users
   reference it from their `Gateway` objects via
-  `spec.gatewayClassName: envoy-gateway`.
+  `spec.gatewayClassName: gardener-envoy-gateway`.
 
 * **Exposure is configured per `Gateway`, not on the `GatewayClass`.** The
   `GatewayClass` is cluster-scoped and owned by the extension; a shoot owner
@@ -586,7 +586,7 @@ two extensions reconcile disjoint resources:
 | Resource | Owner |
 |----------|-------|
 | `IngressClass: nginx` / `IngressClass: traefik` | `shoot-traefik` |
-| `GatewayClass: envoy-gateway` | `envoy-gateway` (registered by Envoy Gateway itself) |
+| `GatewayClass: gardener-envoy-gateway` | `envoy-gateway` (installed by this extension) |
 | Traefik Deployment, IngressRoute CRDs | `shoot-traefik` |
 | Envoy Gateway Deployment, Gateway API CRDs, EnvoyProxy CRDs | `envoy-gateway` |
 
@@ -693,7 +693,8 @@ Strong technical fit but rejected on operational footprint.
   field.
 * **Operational ergonomics**: Istio auto-creates the `istio` `GatewayClass`
   on its own once installed; no manual `GatewayClass` provisioning is needed.
-  (Envoy Gateway behaves the same way with `envoy-gateway`.)
+  (Envoy Gateway ships no `GatewayClass`, so this extension installs the
+  `gardener-envoy-gateway` class on its behalf.)
 * **Why rejected**: Istio bundles a full service mesh (sidecars, mTLS, mesh
   control plane). Installing it merely to get a Gateway API ingress imposes
   a significant operational footprint on every shoot. Users who *want* a
