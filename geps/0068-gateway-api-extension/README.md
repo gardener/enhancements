@@ -3,7 +3,7 @@
 ## Summary
 
 The Kubernetes ecosystem is converging on the [Gateway API](https://gateway-api.sigs.k8s.io/)
-as the long-term successor to the `Ingress` resource. [Gateway API graduated to GA
+as the next generation implementation of the `Ingress` resource. [Gateway API graduated to GA
 with v1.0 in October 2023](https://kubernetes.io/blog/2023/10/31/gateway-api-ga/) and has since received broad implementation support
 across the CNCF landscape. With [GEP-57](../0057-replace-nginx-ingress-shoot-addon-with-traefik-extension/README.md)
 already establishing a Traefik-based replacement for the retired Ingress NGINX
@@ -350,8 +350,8 @@ benchmarked failures with large route volumes — see
   who only consume the standard Gateway API surface can ignore them.
 
 * **Where the workload runs in the shoot.** The Envoy Gateway control plane
-  (Deployment, Service, RBAC, PDB, VPA/HPA) is deployed into a dedicated
-  namespace in the shoot (`envoy-gateway-system`). The per-`Gateway` Envoy
+  (Deployment, Service, RBAC, PDB, VPA/HPA) is deployed into the
+  `kube-system` namespace in the shoot. The per-`Gateway` Envoy
   data-plane proxy Deployments and their `LoadBalancer` Services are created
   by the Envoy Gateway control plane in the namespace of the corresponding
   `Gateway` object. The cluster-scoped CRDs and `GatewayClass` are, by
@@ -849,9 +849,7 @@ them.
   manage a catalog of Envoy Gateway versions with lifecycle classifications,
   and letting shoot owners pin a specific version, is a dedicated topic being
   worked out in a separate extension-versioning GEP; this extension plans to
-  piggy-back on that mechanism (aligned with
-  [GEP-32](../0032-version-classification-lifecycle/README.md)) rather than
-  inventing its own.
+  piggy-back on that mechanism rather than inventing its own.
 
 * **GatewayClass parameters.** Expose a curated set of `EnvoyProxy` template
   fields through `EnvoyGatewayConfig` so shoot owners can tune common knobs
@@ -904,13 +902,6 @@ them.
   the same shoot doubles the load-balancer cost. The admission webhook
   surfaces this to shoot owners as a non-fatal warning on `Shoot`
   create/update.
-
-* **No annotation-compat shim for Gateway API.** Unlike `shoot-traefik`'s
-  `KubernetesIngressNGINX` mode, this extension does not translate `Ingress`
-  resources or NGINX annotations into `HTTPRoute`. Users migrating from
-  `Ingress` will need to rewrite their routing manifests; the migration tool
-  noted under [Future Enhancements](#future-enhancements) is intended to ease
-  this.
 
 
 ## Alternatives
