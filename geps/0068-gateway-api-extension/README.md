@@ -578,29 +578,6 @@ spec:
 To enable the experimental Gateway API CRDs, set `channel: experimental` in
 the provider config above.
 
-### Lifecycle Management
-
-The extension interacts with Gardener's lifecycle protocol as follows:
-
-| Phase | Behaviour |
-|-------|-----------|
-| Reconcile | Creates/updates a `ManagedResource` in the shoot namespace on the seed with all shoot-cluster resources (Gateway API CRDs, Envoy Gateway CRDs, control plane Deployment, Service, RBAC, PDB, optional HPA/VPA, and the `envoy-gateway` `GatewayClass`). Waits for the `ManagedResource` to become healthy before marking the `Extension` as reconciled. |
-| Delete (extension disabled, shoot kept) | When the shoot stays (`cluster.Shoot.DeletionTimestamp` is nil), the extension refuses to remove itself while any `Gateway` object still exists in the shoot, to prevent silent traffic loss. Because the extension only ever creates a `GatewayClass` and a default `EnvoyProxy` — never a `Gateway` — every `Gateway` is by definition user-owned, so the guard simply blocks while any `Gateway` exists across namespaces. This guard runs in the extension controller on the seed (not in an admission webhook, which cannot synchronously list shoot resources); the error is recorded on the `Extension` and surfaces in the `Shoot`'s `.status.lastErrors`. Once no `Gateway` objects remain, the reconciler deletes the `ManagedResource` and waits for `gardener-resource-manager` to finalize it; since every shoot-side object is carried by that single `ManagedResource`, its disappearance transitively guarantees cleanup. The wait is derived from live state, so it is idempotent across controller restarts. |
-| Delete (shoot deletion) | When `cluster.Shoot.DeletionTimestamp` is non-nil, the whole shoot is going away, so the "Gateways still exist" guard is bypassed. The `ManagedResource` is torn down `BeforeKubeAPIServer`. The per-`Gateway` `LoadBalancer` Services are removed as part of the shoot's normal `Service` cleanup, freeing the underlying load balancers. No manual cleanup of `Gateway` objects is required. |
-| Heartbeat | Extension controller participates in the Gardener heartbeat protocol and reports liveness. |
-| Metrics | Port 8080 `/metrics` belongs to the **extension controller** running in the seed, and exposes operational metrics *about the reconciliation of `Extension` objects* (plus the standard controller-runtime, workqueue, and Go-process metrics) — not shoot ingress traffic. The Envoy Gateway control plane and data-plane expose their own Prometheus metrics, but those are shoot-local and scraped by the shoot's own monitoring. |
-| VPA/HPA | Optional VPA and HPA manifests are provided for both the Envoy Gateway control plane and the Envoy data-plane pods in the shoot cluster (VPA enabled by default, HPA opt-in). The extension controller on the seed has its own VPA configuration (see [Extension Registration](#extension-registration)). |
-
-The admission webhook (registered in the garden cluster where `Shoot`
-resources live) validates the `EnvoyGatewayConfig` `providerConfig` (strict
-decoding, field constraints such as replica counts ≥ 1 and a valid
-`logLevel`/`channel`) and enforces the temporary `purpose: evaluation` scope.
-It additionally emits non-fatal **warnings** — surfaced inline by `kubectl`
-without blocking the request — when `channel: experimental` is selected
-(flagging the backwards-incompatibility risk) and when both `shoot-traefik`
-and `envoy-gateway` are enabled on the same shoot (flagging the doubled
-load-balancer cost).
-
 ### Coexistence with `shoot-traefik`
 
 A shoot may have both `shoot-traefik` and `envoy-gateway` enabled. The
