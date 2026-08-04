@@ -230,8 +230,8 @@ flowchart TB
             cp["Envoy Gateway control plane<br/>Deployment, Service, RBAC, PDB, VPA/HPA<br/>xDS server :18000"]
         end
         gw["Gateway + *Route objects<br/>(created by shoot owner)"]
-        proxy["Envoy data-plane proxy Pods<br/>one Deployment+Service per Gateway"]
-        lbSvc["LoadBalancer Service per Gateway"]
+        proxy["Envoy data-plane proxy Pods (in kube-system)<br/>one Deployment+Service per Gateway"]
+        lbSvc["LoadBalancer Service per Gateway<br/>(in kube-system)"]
     end
 
     ext(["External ingress traffic"])
@@ -257,8 +257,8 @@ flowchart TB
 | Envoy Gateway CRDs (`EnvoyProxy`, `BackendTrafficPolicy`, `ClientTrafficPolicy`, `SecurityPolicy`, …) | Shoot | Required for the Envoy Gateway control plane to function. |
 | Envoy Gateway **control plane** (Deployment, Service, RBAC, PDB, optional VPA/HPA) | Shoot | Runs as Pods inside the shoot. Translates `Gateway`/`*Route` resources into Envoy xDS configuration. |
 | `GatewayClass` (`gardener-envoy-gateway`) | Shoot | Created by this extension via `ManagedResource`. Bound to controller `gateway.envoyproxy.io/gatewayclass-controller`. |
-| Envoy **data plane** (proxy Pods) | Shoot | Spawned by the Envoy Gateway control plane in response to user-created `Gateway` objects. Each `Gateway` gets its own Envoy Deployment + `Service` in the shoot. |
-| LoadBalancer `Service` per `Gateway` | Shoot (object); LB provisioned from the control plane | The `Service` object lives in the shoot and is created **implicitly** by the Envoy Gateway control plane when it reconciles a `Gateway` — the extension does not provision it. The backing cloud load balancer is provisioned by the shoot's `cloud-controller-manager`, which runs in the shoot's control plane on the seed, exactly like an `Ingress`-mode LB today. |
+| Envoy **data plane** (proxy Pods) | Shoot (`kube-system`) | Spawned by the Envoy Gateway control plane in response to user-created `Gateway` objects. Each `Gateway` gets its own Envoy Deployment + `Service`, created in `kube-system` (Controller Namespace Mode) irrespective of the `Gateway`'s own namespace. |
+| LoadBalancer `Service` per `Gateway` | Shoot (`kube-system`); LB provisioned from the control plane | The `Service` object lives in the shoot's `kube-system` namespace and is created **implicitly** by the Envoy Gateway control plane when it reconciles a `Gateway` — the extension does not provision it. The backing cloud load balancer is provisioned by the shoot's `cloud-controller-manager`, which runs in the shoot's control plane on the seed, exactly like an `Ingress`-mode LB today. |
 
 There are deliberately **no components running in the seed on behalf of the
 data path**. The seed hosts only the Gardener extension controller and the
@@ -352,9 +352,9 @@ benchmarked failures with large route volumes — see
 * **Where the workload runs in the shoot.** The Envoy Gateway control plane
   (Deployment, Service, RBAC, PDB, VPA/HPA) is deployed into the
   `kube-system` namespace in the shoot. The per-`Gateway` Envoy
-  data-plane proxy Deployments and their `LoadBalancer` Services are created
-  by the Envoy Gateway control plane in the namespace of the corresponding
-  `Gateway` object. The cluster-scoped CRDs and `GatewayClass` are, by
+  data-plane proxy Deployments and their `LoadBalancer` Services are **also**
+  created in `kube-system`, regardless of which namespace the `Gateway`
+  object lives in. The cluster-scoped CRDs and `GatewayClass` are, by
   definition, not namespaced.
 
 * **`GatewayClass` is `gardener-envoy-gateway`.** The extension installs a
@@ -593,7 +593,7 @@ two extensions reconcile disjoint resources:
 There is no IP/port conflict, because the two paths never share a `Service`:
 `shoot-traefik` provisions its own `LoadBalancer` Service for the Traefik
 proxy, while under `envoy-gateway` a `LoadBalancer` Service is created
-per user `Gateway` by the Envoy Gateway control plane (see
+per user `Gateway` by the Envoy Gateway control plane in `kube-system` (see
 [Deployment Topology](#deployment-topology-seed-vs-shoot)) — the extension
 itself provisions none. The cost consideration is therefore conditional: a
 shoot that actually runs `Gateway` objects alongside Traefik ingress pays for
