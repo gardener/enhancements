@@ -160,16 +160,19 @@ Key problems this GEP addresses:
    `gardener-envoy-gateway` bound to the Envoy Gateway controller. Users may
    install additional `GatewayClass` objects pointing at other implementations
    independently of this extension.
-5. This GEP does **not** cover network policy, mTLS automation, or
-   advanced traffic policies (rate limiting, JWT auth, WAF), nor automated
-   integration with other Gardener extensions such as `shoot-dns-service`
-   (DNS records) or `shoot-cert-service` (TLS certificates) for
-   Gateway-exposed workloads. Gateway API resources can reference
-   externally-managed DNS names and TLS secrets today, but wiring those
-   extensions to react to `Gateway`/`HTTPRoute` objects is not on the initial
-   roadmap. These can be layered on top via the chosen implementation's policy
-   CRDs but are not exercised by the extension itself in the initial release.
-6. The initial scope targets the `shoot` extension class only. Support for
+5. This GEP does **not** cover automated integration with other Gardener
+   extensions such as `shoot-dns-service` (DNS records) or `shoot-cert-service`
+   (TLS certificates) for Gateway-exposed workloads. Gateway API resources can
+   reference externally-managed DNS names and TLS secrets today, but wiring
+   those extensions to react to `Gateway`/`HTTPRoute` objects is not on the
+   initial roadmap.
+6. This GEP does **not** cover network policy, mTLS automation, or advanced
+   traffic policies (rate limiting, JWT auth, WAF). Envoy Gateway exposes these
+   through its own policy CRDs (e.g. `SecurityPolicy`, `BackendTrafficPolicy`)
+   which users may author on top of the standard `Gateway`/`HTTPRoute`
+   resources. The extension itself neither creates nor manages these policies
+   in the initial release.
+7. The initial scope targets the `shoot` extension class only. Support for
    the `garden` and `seed` classes (so operators and other extensions can
    expose workloads in the garden/seed clusters via Gateway API) is **not**
    part of the first release — Gardener uses Istio for garden/seed exposure
