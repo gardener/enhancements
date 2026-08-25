@@ -4,7 +4,7 @@
 This GEP proposes to provide a mechanism to make both the internal and external domains of a Shoot mutable. In certain environments, the internal domain can even be removed completely. The migration process after changing, adding, or removing a domain is carried out as part of a CA rotation.
 
 ## Motivation
-Every Gardener environment requires at least one DNS zone for managing "internal domains" of shoots. The internal domain is especially useful, when shoot owners can configure their own "external domain"/provider/zone for their shoot API servers (i.e., via Shoot.spec.dns). It is used for all cluster-critical communication (e.g., kubelet/gardener-node-agent to API server) to ensure robustness and prevent disruptions caused by user configurations.
+Every Gardener environment requires at least one DNS zone for managing "internal domains" of shoots. The internal domain is especially useful, when shoot owners can configure their own "external domain"/provider/zone for their shoot API servers (i.e., via Shoot.spec.dns). The internal domain is used for all cluster-critical communication (e.g., kubelet/gardener-node-agent to API server) to ensure robustness and prevent disruptions caused by user misconfigurations.
 
 Currently, an existing shoot's internal domain cannot be changed. Although, in real life, there are several cases, where domain names need to be changed also for existing shoots, for example because of a wrong configuration in the first place, or due to compliance reasons.
 
@@ -86,7 +86,7 @@ The domain configuration on the Seed level can already only be modified by opera
 If applicable, the ServiceAccount token issuer configuration must be updated as described in [Migration Mechanism for Single Shoots](#migration-mechanism-for-single-shoots).
 
 ### Extension of the Admission Mechanism
-- implement or extend a admission plugin that checks the new RBAC verb
+- implement or extend an admission plugin that checks the new RBAC verb
 - the `ShootDNS` admission plugin might be a good fit
 
 ### Validation
