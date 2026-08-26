@@ -7,14 +7,14 @@ Source: https://github.com/gardener/<repo name>
 # source code
 
 Files: *
-Copyright: Copyright Contributors to the Gardener project
+Copyright: Contributors to the Gardener project
 License: Apache-2.0
 
 # --------------------------------------------------
 # documentation
 
 Files: *.md
-Copyright: Copyright Contributors to the Gardener project
+Copyright: Contributors to the Gardener project
 License: CC-BY-4.0
 
 # --------------------------------------------------
