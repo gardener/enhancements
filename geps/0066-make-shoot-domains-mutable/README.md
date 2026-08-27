@@ -29,7 +29,7 @@ Providing a way to manage these domains for existing shoots would improve the us
 ## Proposal
 
 ### Modify a Shoot's External Domain
-Because the internal and external domains are part of a Shoot's network setup, the existing CA rotation mechanism can be reused for domain migrations on the Shoot level.
+To apply modifications of  a Shoot's internal and external domain, the existing CA rotation mechanism is reused.
 
 **Flow of Operation: Change the External Domain for a Single Shoot**
 - An authorized user modifies the field `Shoot.spec.dns.domain` according to their needs **AND** adds the annotation `gardener.cloud/operation=rotate-ca-start` to trigger the migration.
@@ -51,11 +51,11 @@ The internal domain may only be disabled if every Shoot on the Seed has a valid 
 
 **Flow of Operation for Entire Seeds:**
 - The operator modifies `Seed.spec.dns.internal.domain` or `Seed.spec.dns.internalDomainEnabled` according to their needs.
-- The new constraint on the Shoot level detects the mismatch and makes the Shoot owners aware of the need for a CA rotation.
+- If the gardenlet detects the mismatch, it adds the new constraint to make the Shoot owners aware of the need for a CA rotation.
 - Whenever a CA rotation is triggered for a specific Shoot on this Seed, the internal domain of this Shoot is migrated to the new internal domain.
 
 ### Securing Control Over the Domain Configuration
-Only operators must be able to modify the external domain configuration of a Shoot. Therefore, a new custom RBAC verb named `modify-spec-domain` is introduced, which protects the `Shoot.spec.dns.domain` field, similar to the `modify-spec-tolerations-whitelist` and `mark-self-hosted` verbs provided through the [`CustomVerbAuthorizer`](https://github.com/gardener/gardener/blob/0025fc1765c6fdb9106249bb1754108acedb4362/docs/concepts/apiserver-admission-plugins.md#customverbauthorizer).
+For the case that only operators should be able to modify the external domain configuration of a Shoot, a new custom RBAC verb named `modify-spec-domain` is introduced, which protects the `Shoot.spec.dns.domain` field, similar to the `modify-spec-tolerations-whitelist` and `mark-self-hosted` verbs provided through the [`CustomVerbAuthorizer`](https://github.com/gardener/gardener/blob/0025fc1765c6fdb9106249bb1754108acedb4362/docs/concepts/apiserver-admission-plugins.md#customverbauthorizer).
 
 The domain configuration on the Seed level can already only be modified by operators.
 
