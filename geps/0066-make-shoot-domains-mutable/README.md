@@ -42,7 +42,7 @@ Adding the triggering annotation in the same step as the actual domain modificat
 
 The new external domain is written to `Shoot.status.advertisedAddresses` with the name `external`. After this, the external domain cannot be changed anymore for the ongoning migration. The precise point in the migration process (i.e., the phase and circumstances) at which this occurs will be determined during the implementation of this GEP. This gives rise to complex implications that are more easily examined using concrete code.
 
-The old external domain will also be written to `Shoot.status.advertisedAddresses` with the name `obsolete-external`.
+The old external domain will also be written to `Shoot.status.advertisedAddresses` with the name `prior-external`.
 
 The domain provider cannot be modified. This can be implemented as a future improvement and is out of scope for this GEP.
 
@@ -66,7 +66,7 @@ The internal domain may only be disabled if every Shoot on the Seed has a valid 
 - The Shoot owner adds the annotation `confirmation.gardener.cloud/migrate-internal-domain=true` to the Shoot to indicate that a migration of the internal domain can be conducted with the next CA rotation.
 - Adds the annotation `gardener.cloud/operation=rotate-ca-start` to trigger the migration.
 - The two-phase CA rotation is started.
-- In the `PREPARING` phase, the DNS records for new domain names are created and appended to the server certificates, while the old domain names are still kept in place to allow a seamless transition. The new internal domain is written to `Shoot.status.advertisedAddresses` with the name `internal`; the old internal domain is added to `Shoot.status.advertisedAddresses` with the name `obsolete-internal`. So both the new and the old internal domain are recorded as in use. If the Shoot uses the default ServiceAccount token issuer — which is derived from the internal domain — the new issuer becomes the primary one (used to mint new tokens), and the old issuer is added to the kube-apiserver's `serviceAccountConfig.acceptedIssuers`, so tokens already issued with the old `iss` claim remain valid during the transition.
+- In the `PREPARING` phase, the DNS records for new domain names are created and appended to the server certificates, while the old domain names are still kept in place to allow a seamless transition. The new internal domain is written to `Shoot.status.advertisedAddresses` with the name `internal`; the old internal domain is added to `Shoot.status.advertisedAddresses` with the name `prior-internal`. So both the new and the old internal domain are recorded as in use. If the Shoot uses the default ServiceAccount token issuer — which is derived from the internal domain — the new issuer becomes the primary one (used to mint new tokens), and the old issuer is added to the kube-apiserver's `serviceAccountConfig.acceptedIssuers`, so tokens already issued with the old `iss` claim remain valid during the transition.
 - When the `PREPARED` phase is reached, the cluster is available through its new domain names. Users need to ensure that they use the new domain and the credentials to access the cluster from now on.
 - In the `COMPLETING` phase, the obsolete DNS records are deleted and the corresponding domains are removed from the server certificates. The obsolete internal domain is removed from `Shoot.status.advertisedAddresses`, leaving only the new one. Likewise, the old issuer is removed from the kube-apiserver's `serviceAccountConfig.acceptedIssuers` (see `PREPARING`). Note that bound/projected tokens refresh automatically, but tokens acquired through the token request API will be invalid after the migration. Users must take care of renewing those tokens.
 
@@ -90,8 +90,8 @@ Adding the confirmation annotation in a separate step, before adding the trigger
 - Add and handle the new `confirmation.gardener.cloud/migrate-internal-domain=true` annotation.
 
 **Shoot Status**:
-- Allow a new entry with name `obsolete-internal` in the `status.advertisedAddresses` while a CA rotation with domain migration is ongoing.
-- Allow a new entry with name `obsolete-external` in the `status.advertisedAddresses` while a CA rotation with domain migration is ongoing.
+- Allow a new entry with name `prior-internal` in the `status.advertisedAddresses` while a CA rotation with domain migration is ongoing.
+- Allow a new entry with name `prior-external` in the `status.advertisedAddresses` while a CA rotation with domain migration is ongoing.
 - Add a new constraint that detects a mismatch between the Seed's and the Shoot's internal domain.
 
 **Seed Spec**:
@@ -105,11 +105,11 @@ The old `spec.dns.internal` field will be deprecated and removed in the long ter
 **Phase 1 (Prepare)**:
 - Deploy both old and new `DNSRecord` resources.
 - Update APIServer SANs to include both. Issue new kubeconfigs with the new domain.
-- Add the `obsolete-internal` domain into the `status.advertisedAddresses`.
+- Add the `prior-internal` domain into the `status.advertisedAddresses`.
 
 **Phase 2 (Complete)**:
 - Clean up the old `DNSRecord` resources and remove the old domain from the SANs.
-- Remove the `obsolete-internal` domain from `status.advertisedAddresses`.
+- Remove the `prior-internal` domain from `status.advertisedAddresses`.
 
 Besides the Shoot reconciler, also the corresponding implementation in the `SelfHostedShootExposure` controller needs to be adapted accordingly (see https://github.com/gardener/gardener/blob/master/pkg/gardenlet/controller/shoot/selfhostedshootexposure/reconciler.go).
 
