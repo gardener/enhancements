@@ -1,0 +1,35 @@
+%%{init: {'theme': 'default', 'themeVariables': {'background': '#ffffff'}}}%%
+sequenceDiagram
+  autonumber
+  participant Owner as Shoot owner
+  participant API as gardener-apiserver
+  participant PROF as ExtensionProfile
+  participant GCM as gardener-controller-manager
+  participant GL as gardenlet
+  participant EXT as Extension controller
+
+  Owner->>API: create/update Shoot<br/>(extensions[].version=3.1.4, policy=patch)
+  API->>PROF: lookup entry 3.1.4
+  PROF-->>API: entry + lifecycle + compatibility
+  API->>API: validate: classification ∈ {preview*,supported,deprecated}<br/>+ compat.kubernetes matches
+  API-->>Owner: accepted / rejected
+
+  loop every reconcile
+    GCM->>PROF: read lifecycle
+    GCM->>PROF: write status.profileVersions[].classification<br/>(now-based computation)
+  end
+
+  loop maintenance window
+    GCM->>GCM: for shoots with effective policy != none:<br/>find highest permitted version<br/>within the policy boundary
+    alt newer version available
+      GCM->>API: patch Shoot.spec.extensions[].version
+    end
+    alt current version expired
+      GCM->>API: force-upgrade to lowest supported patch<br/>of the next available minor
+    end
+  end
+
+  GL->>API: watch Shoot
+  GL->>PROF: resolve entry
+  GL->>EXT: reconcile Extension resource<br/>with resolved version
+  EXT->>EXT: deploy the managed component<br/>at the resolved version

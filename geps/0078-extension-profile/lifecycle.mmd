@@ -1,0 +1,27 @@
+%%{init: {'theme': 'default', 'themeVariables': {'background': '#ffffff'}}}%%
+stateDiagram-v2
+  [*] --> unavailable: profile entry created<br/>with future startTime
+  [*] --> preview: profile entry created<br/>(no startTime, default)
+  unavailable --> preview: startTime reached
+  preview --> supported: startTime reached
+  supported --> deprecated: startTime reached
+  deprecated --> expired: startTime reached
+  expired --> [*]: removed from profile
+
+  note right of preview
+    Selectable with
+    explicit opt-in
+  end note
+  note right of supported
+    Default target for
+    fresh shoots &
+    auto-upgrade
+  end note
+  note right of deprecated
+    Still selectable;
+    upgrade nudged
+  end note
+  note right of expired
+    Force-upgrade path
+    fires
+  end note

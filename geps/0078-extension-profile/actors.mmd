@@ -1,0 +1,56 @@
+%%{init: {'theme': 'default', 'themeVariables': {'background': '#ffffff'}}}%%
+flowchart TB
+  %% ── Row 1: Actors ─────────────────────────────────────────
+  OP["Landscape<br/>operator"]
+  OWN["Shoot<br/>owner"]
+
+  %% ── Row 2: Garden cluster (API objects, then controllers) ─
+  subgraph Garden["Garden cluster"]
+    direction TB
+    subgraph GardenAPIs["API objects"]
+      direction LR
+      PROF["ExtensionProfile<br/>(component versions +<br/>lifecycle)"]
+      CR["ControllerRegistration /<br/>Extension"]
+      SH["Shoot<br/>spec.extensions[].version<br/>versionUpdatePolicy"]
+    end
+    subgraph GardenCtrl["Control-plane components"]
+      direction LR
+      GAPI["gardener-apiserver<br/>(admission)"]
+      GCM["gardener-controller-manager<br/>(classify + auto-upgrade)"]
+    end
+    GardenAPIs ~~~ GardenCtrl
+  end
+
+  %% ── Row 3: Seed cluster ───────────────────────────────────
+  subgraph Seed["Seed cluster"]
+    direction LR
+    GL["gardenlet"]
+    EXT["Extension<br/>controller"]
+  end
+
+  %% ── Row 4: Shoot ──────────────────────────────────────────
+  subgraph ShootCluster["Shoot cluster (control plane)"]
+    PAY["Managed component<br/>(Traefik / Envoy GW /<br/>Falco / Diki)"]
+  end
+
+  %% Actor → specific API object (not the whole garden box)
+  OP  -- maintains --> PROF
+  OP  -- deploys   --> CR
+  OWN -- pins      --> SH
+
+  %% Admission & classification (arrows flow controllers → APIs
+  %% so the layout engine ranks API objects above controllers)
+  GAPI -- validates          --> SH
+  GAPI -- reads              --> PROF
+  GCM  -- classifies         --> PROF
+  GCM  -- auto-upgrades      --> SH
+
+  %% Garden → seed → shoot deployment path
+  SH   -- resolved by    --> GL
+  PROF -- resolved entry --> GL
+  GL   -- reconciles     --> EXT
+  EXT  -- deploys        --> PAY
+
+  %% Highlight the new resource this GEP introduces
+  classDef newResource fill:#fff4c2,stroke:#d4a017,stroke-width:2px;
+  class PROF newResource;
