@@ -156,8 +156,8 @@ The `status` always reflects the current state of a classification no matter if 
 
 Of course the new version classification lifecycles must be compatible with `NamespacedCloudProfile`s. This leads to some special cases to ensure the overridden `CloudProfile` inside `NamespacedCloudProfile.Status` itself always produces a valid `CloudProfile`.
 
-In the previous implementation a version's `classification` could not be changed, while changing the `expirationDate` is allowed. We try to retain this intention.
-Hence changing the `startTime` of a stage is possible, but introducing new lifecycle stages isn't.
+In the previous implementation a version's `classification` could not be changed, while adding or changing the `expirationDate` was allowed. This GEP exactly retains this behavior.
+Accordingly, users can only specify a lifecycle with an expired stage in `NamespacedCloudProfiles`, specifying or overriding other stage is not allowed.
 
 Given the `CloudProfile` from above, the following `NamespacedCloudProfile` is valid:
 
@@ -172,19 +172,15 @@ spec:
     versions:
       # omitted versions will not be changed
 
-      - version: 1.28.0
-        lifecycle:
-          # preview stage will stay as is
-          - classification: supported
-            startTime: "2025-12-01T00:00:00Z" # postpones the start time
-
       - version: 1.18.0
         lifecycle:
-          - classification: supported
-            startTime: "2022-01-01T00:00:00Z" # adds a startTime to supported
-          - classification: deprecated
-            startTime: "2024-06-01T00:00:00Z" # postpones deprecated even after expired
-          # expired stage will be adjusted to the startTime of deprecated to avoid the version to expire before deprecation
+          - classification: expired
+            startTime: "2024-06-01T00:00:00Z" # postponing expiration of this version (later than the start time in the parent CloudProfile)
+
+      - version: 2.0.0
+        lifecycle:
+          - classification: expired # adding an expiration time of this version (the parent CloudProfile doesn't specify one)
+            startTime: "2040-01-07T06:28:16Z"
 status:
   cloudProfileSpec:
       kubernetes:
@@ -215,19 +211,79 @@ status:
 
 Declaring and updating a `NamespacedCloudProfile` is straightforward and creating an invalid `NamespacedCloudProfile.Status` is prevented by our existing validations.
 
-Though introducing new stages or changing their `startTime` in the `CloudProfile` might lead to conflicts like the following:
+We don't allow overriding existing stages or introducing new stages, because this might lead to unintended results during merging:
 
-1. The start time of the deprecated stage might be between the ones of preview or supported.
-2. The start time of expired might be before deprecated.
+1. The start time of the `deprecated` stage might be between the ones of `preview` or `supported`, which would be invalid. Automatically adapting the start time of the `supported` stage in the controller would contradict the user's intent from the `NamespacedCloudProfile`.
+2. Postponing the start time of the `preview` stage to be later than the start time of the `supported` stage in the parent would be invalid. Automatically adapting the start time of the `supported` stage in the controller to be at the same start time as the overwritten `preview` stage would skip the preview stage entirely, again contradicting the user's intent.
 
-To solve these contradictions, the `startTime` of the base profile's stages will implicitly be overridden in `NamespacedCloudProfile.Status`.
-In case of the two examples above, this means:
+These two scenarios are illustrated in the following example:
+```yaml
+# parent CloudProfile
+versions:
+- version: 1.0.0
+  lifecycle:
+  - stage: preview
+    startTime: "2026-06-01T00:00:00Z"
+  - stage: supported
+    startTime: "2026-08-01T00:00:00Z"
+- version: 2.0.0
+  lifecycle:
+  - stage: preview
+    startTime: "2026-06-01T00:00:00Z"
+  - stage: supported
+    startTime: "2026-08-01T00:00:00Z"
 
-1. `preview`'s `startTime` will be set to the one of the `deprecated` override.
-2. `expired`'s `startTime` will be set to the one of the `deprecated` override.
+# NamespacedCloudProfile
+versions:
+- version: 1.0.0
+  lifecycle:
+  - stage: deprecated
+    startTime: "2026-07-01T00:00:00Z"
+- version: 2.0.0
+  lifecycle:
+  - stage: preview
+    startTime: "2026-09-01T00:00:00Z"
 
-This way the administrator is always capable of introducing or changing the `startTime` of new lifecycle stages for existing versions in the parent `CloudProfile`.
-But as long as any `NamespacedCloudProfile` overrides one lifecycle stage, the stage itself cannot be deleted.
+# result
+versions:
+- version: 1.0.0 # case 1
+  lifecycle:
+  - stage: preview
+    startTime: "2026-06-01T00:00:00Z"
+  - stage: supported
+    startTime: "2026-08-01T00:00:00Z" # would need to be advanced to 2026-07-01, otherwise invalid
+  - stage: deprecated
+    startTime: "2026-07-01T00:00:00Z" # invalid, start times are not monotonically increasing
+
+- version: 2.0.0 # case 2
+  lifecycle:
+  - stage: preview
+    startTime: "2026-09-01T00:00:00Z" # invalid, start times are not monotonically increasing
+  - stage: supported
+    startTime: "2026-08-01T00:00:00Z" # would need to be postponed to 2026-09-01, but this would skip the preview stage
+```
+
+## Future Enhancements
+
+### Support Overwriting Version Lifecycles in NamespacedCloudProfiles
+
+In setups where users can't create `NamespacedCloudProfiles`, the operator might want to set different version lifecycles per project.
+In this case, the operator would need to overwrite the lifecycle stages from the parent `CloudProfile` entirely.
+Because this GEP retains the previous behavior that only allows overwriting the expiration date of a version, this use case is not supported yet.
+
+To support this scenario, the operator could allow overwriting the version lifecycles by setting a new field in the parent `CloudProfile` object, e.g.:
+```yaml
+apiVersion: core.gardener.cloud/v1beta1
+kind: CloudProfile
+spec:
+  # up to discussion
+  allowVersionLifecycleOverwrites: true
+```
+
+If this field is set, `NamespacedCloudProfiles` can specify a full version lifecycle for kubernetes and machine image versions.
+If the lifecycle is set for a given version, the `NamespacedCloudProfile` version lifecycle takes precedence and the parent lifecycle is overwritten entirely.
+Specifying a version lifecycle overwrite must match the same validations as in the parent `CloudProfile`.
+Introducing new versions in a `NamespacedCloudProfile` is not allowed.
 
 ## Considered Alternatives
 
