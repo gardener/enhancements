@@ -38,9 +38,11 @@ To apply modifications of a Shoot's internal and external domain, the existing C
 - The two-phase CA rotation is started.
 - In the `PREPARING` phase, the DNS records for new domain names are created and appended to the server certificates, while the old domain names are still kept in place to allow a seamless transition. The new and the old external domains are written to `Shoot.status.advertisedAddresses` as `external` and `prior-external`, so both domains are recorded as in use.
 - When the `PREPARED` phase is reached, the cluster is available through its new domain names. Users need to ensure that they use the new domain and the new credentials to access the cluster from now on. 
-- In the `COMPLETING` phase, the obsolete DNS records are deleted and the corresponding domains are removed from the server certificates. Note that bound/projected tokens refresh automatically, but tokens acquired through the token request API will be invalid after the migration. Users must take care of renewing those tokens.
+- In the `COMPLETING` phase, the obsolete DNS records are deleted and the corresponding domains are removed from the server certificates. The obsolete external domain is removed from `Shoot.status.advertisedAddresses`, leaving only the new one. Note that bound/projected tokens refresh automatically, but tokens acquired through the token request API will be invalid after the migration. Users must take care of renewing those tokens.
 
 Adding the triggering annotation in the same step as the actual domain modifications is mandatory.
+
+If the internal domain is disabled, the external domain is also used as service account issuer. Therefore, the new domain is added as issuer to the kube-apiserver's `serviceAccountConfig.acceptedIssuers` during the `PREPARING` phase, the old one is removed during the `COMPLETING` phase.
 
 As described, the new external domain is written to `Shoot.status.advertisedAddresses` with the name `external`. After this, the external domain cannot be changed anymore for the ongoing migration. The precise point in the migration process (i.e., the phase and circumstances) at which this occurs will be determined during the implementation of this GEP. This gives rise to complex implications that are more easily examined using concrete code.
 
@@ -101,30 +103,38 @@ Adding the confirmation annotation in a separate step, before adding the trigger
 - Add the new field `spec.dns.internalDomains`.
 - Add the new field `spec.dns.internalDomainEnabled` to indicate the need for an internal domain for the Shoots on this Seed.
 
-The `spec.dns.internal` field will be deprecated and removed in the long term (see https://github.com/gardener/gardener/blob/master/docs/development/changing-the-api.md#removing-a-field).
+The `spec.dns.internal` field will be deprecated and removed in the long term (see https://github.com/gardener/gardener/blob/master/docs/development/changing-the-api.md#removing-a-field). While both fields are in place, the gardener-apiserver will make sure they are in sync (defaulting `internalDomains[0]` from `internal` when only the latter is set, and mirroring it back).
 
 An alternative configuration of the internal domain through the `internal-domain` secret is out of scope for this GEP.
 
 ### Extension of the CA Rotation Mechanism
 
 **Phase 1 (Prepare)**:
-- Deploy both old and new `DNSRecord` resources.
+- Deploy both old and new `DNSRecord` resources. Use new `role` labels `prior-internal` and `prior-external` for the old records.
 - Update APIServer SANs to include both. Issue new kubeconfigs with the new domain.
-- Add the `prior-internal` domain into the `status.advertisedAddresses`.
+- Maintain the old and new domain entires in the `status.advertisedAddresses`.
 
 **Phase 2 (Complete)**:
 - Clean up the old `DNSRecord` resources and remove the old domain from the SANs.
-- Remove the `prior-internal` domain from `status.advertisedAddresses`.
+- Remove the prior domain entries from `status.advertisedAddresses`.
 
-Besides the Shoot reconciler, also the corresponding implementation in the `SelfHostedShootExposure` controller needs to be adapted accordingly (see https://github.com/gardener/gardener/blob/master/pkg/gardenlet/controller/shoot/selfhostedshootexposure/reconciler.go).
+### Self-Hosted Shoot Exposure
+
+Besides the Shoot reconciler, also the corresponding implementation in the `SelfHostedShootExposure` controller needs to be adapted accordingly (see https://github.com/gardener/gardener/blob/master/pkg/gardenlet/controller/shoot/selfhostedshootexposure/reconciler.go). This will be done in a phased manner, updating the `SelfHostedShootExposure` controller will be the last step in the implementation of this GEP. In the meantime, changing domains of self-hosted shoots must be denied.
+
+The following changes must be applied to the `SelfHostedShootExposure` controller:
+- Patch both external API DNS records. Use labels instead of the naming convention (`<shoot>-external`) to find them.
+- Point both DNS records at the current control-plane node addresses.
+- Treat the `prior-external` DNS record as optional, i.e. ignore `NotFound` errors.
 
 ### Validation
 - Ensure a Shoot has at least one valid domain (either internal or external).
 - Enforce that a Shoot has an external domain, if the Seed has the internal domain disabled (`Seed.spec.dns.internalDomainEnabled = false`). This especially affects create, update, and seed scheduling.
 - Enforce that domain changes only occur in the same API request that prepares a CA rotation.
-- Ensure the field `Seed.spec.dns.internal` and the first element of `Seed.spec.dns.internalDomains` are in sync.
 - Ensure that the external domain in a Shoot matches the default domains defined in the Seed, if there is no custom domain provider defined.
 - Ensure that no entries are removed from `Seed.spec.dns.internalDomains` if there exists any Shoot on the Seed that is still using this internal domain. The field `Shoot.status.advertisedAddresses` is used to verify the use of internal domains (looking at the `internal` entry).
+- Ensure that `Shoot.spec.dns.providers` and `Seed.spec.dns.provider` are not modified while a domain migration is requested.
+- Temporarily deny domain changes in self-hosted shoots (until the `SelfHostedShootExposure` controller is adapted accordingly).
 
 ### Feature Gate
 A new feature gate `MutableShootDomains` is added to `gardener-apiserver` and `gardenlet`. The mutability of `Shoot.spec.dns.domain` and the new Seed fields `spec.dns.internalDomains`, `spec.dns.internalDomainEnabled` only take effect if the feature gate is enabled. No `prior-*` entries are added to `Shoot.status.advertisedAddresses`, no constraint about the need to execute a domain migration is added to `Shoot.status.constraints`.
