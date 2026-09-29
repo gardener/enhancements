@@ -316,12 +316,12 @@ Each provider extension must validate its part of the cloud profile to ensure th
 
 The algorithm to determine if an image is valid for a machine type is given as follows: 
 
-For every capability the union of values that is supported by the machine type and the machine image must not be empty.
+For every capability the intersection of values that is supported by the machine type and the machine image must not be empty.
 In other words, the machine image must support at least one value of each capability of the machine type.
 
 ```js
 for capabilityName, machineCapabilities in machineType.capabilities:
-  if union(imageVersion.capabilities[capabilityName], machineCapabilities) is empty:
+  if intersection(imageVersion.capabilities[capabilityName], machineCapabilities) is empty:
     return false
       
 return true
