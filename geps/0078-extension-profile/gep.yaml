@@ -1,0 +1,14 @@
+title: "Homogeneous Version Profile for Extension-Managed Components"
+gep-number: 0078
+authors:
+- "@docktofuture"
+steering-link: https://gardener.cloud/community/steering/0078-a-homogeneous-version-profile-for-extension-managed-components/
+status: provisional
+creation-date: 2026-09-09
+reviewers:
+- "@timebertt"
+- "@ScheererJ"
+- "@rfranzke"
+- "@vpnachev"
+approvers:
+- "@ScheererJ"
