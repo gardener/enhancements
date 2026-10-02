@@ -1,7 +1,7 @@
 ---
 name: Enhancement tracking issue
 about: Template for enhancement issues
-labels: kind/enhancement
+labels: ["kind/enhancement", "lifecycle/active"]
 ---
 
 ### Enhancement Description
