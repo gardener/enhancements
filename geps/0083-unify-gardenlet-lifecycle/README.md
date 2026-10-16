@@ -16,10 +16,10 @@ The two changes are complementary: the first unifies the lifecycle model; the se
 
 Today there are two separate paths to run a `gardenlet`:
 
-- **Unmanaged seeds** where `gardenlet` gets deployed by a human operator directly via its Helm chart have a `Gardenlet` resource *only when self-upgrade is enabled* — it is opt-in today: the [chart's `selfUpgrade`](https://github.com/gardener/gardener/blob/8d067240f5284279481cf5e78977f83e1f1fded8/charts/gardener/gardenlet/values.yaml#L236-L242) values render a `gardenlet-selfupgrade-config` `ConfigMap`, which the `gardenlet` turns into a `Gardenlet` resource at startup ([`createSelfUpgradeConfig`](https://github.com/gardener/gardener/blob/8d067240f5284279481cf5e78977f83e1f1fded8/cmd/gardenlet/app/app.go#L671-L697)); without it, no `Gardenlet` resource exists.
+- **Unmanaged seeds** where `gardenlet` is deployed directly via its Helm chart (by a person or by some automation/operator/controller) have a `Gardenlet` resource *only when self-upgrade is enabled* — it is opt-in today: the [chart's `selfUpgrade`](https://github.com/gardener/gardener/blob/8d067240f5284279481cf5e78977f83e1f1fded8/charts/gardener/gardenlet/values.yaml#L236-L242) values render a `gardenlet-selfupgrade-config` `ConfigMap`, which the `gardenlet` turns into a `Gardenlet` resource at startup ([`createSelfUpgradeConfig`](https://github.com/gardener/gardener/blob/8d067240f5284279481cf5e78977f83e1f1fded8/cmd/gardenlet/app/app.go#L671-L697)); without it, no `Gardenlet` resource exists.
 - **Managed seeds** use the `ManagedSeed` API, reconciled by the *parent* `gardenlet` through the shared `gardenletdeployer` actuator, which deploys the child `gardenlet`'s Helm chart into the shoot cluster. The parent keeps reconciling it for the resource's lifetime — no self-upgrades.
 
-The result is two code paths, three mental models, and two sets of API machinery for the same component.
+The result is two code paths and two sets of API machinery for the same component.
 Notably, a `Gardenlet` resource for a managed seed is explicitly *rejected* by admission today — the two worlds are kept apart by design.
 
 > [!NOTE]
@@ -47,7 +47,7 @@ The structural fix is to take `Seed.spec` authorship away from the `gardenlet` e
 
 ### Goals
 
-- Make self-upgrade (and thus the `Gardenlet` resource) mandatory for unmanaged seeds too — it already is for self-hosted shoots — rather than the opt-in it is today. The single lifecycle API only works if the resource universally exists.
+- Make self-upgrade (and thus the `Gardenlet` resource) mandatory for unmanaged seeds too — it already is for self-hosted shoots — rather than the opt-in it is today. This makes the `Gardenlet` resource the single source of truth for a `gardenlet`'s deployment: the self-upgrade controller continuously reconciles the running deployment to match it, so lifecycle management flows through the resource rather than through ad-hoc, out-of-band `helm` operations. The single lifecycle API only works if the resource universally exists.
 - Represent managed seeds via the `Gardenlet` resource with a new `shootRef` field.
 - Deprecate and eventually remove the `ManagedSeed` API (and the `ManagedSeedSet` API as well — already planned for removal, see [hackathon#52](https://github.com/gardener/hackathon/issues/52)).
 - Remove the `gardenlet`'s ability to author its own `Seed` desired state; forbid it from creating `Seed`s or changing `Seed.spec`, while keeping metadata and status writable.
@@ -97,9 +97,14 @@ The `bootstrap` and `mergeWithParent` fields of `ManagedSeed.spec.gardenlet` are
 `mergeWithParent` is effectively always `true` in practice. Dropping both keeps the `Gardenlet` API lean.
 
 > [!NOTE]
-> The managed-seed and self-hosted-shoot cases both set `shootRef` but differ in whether a `Seed` is registered.
-> Likely, no explicit discriminator is needed: the controller reads the referenced `Shoot` and checks whether it is self-hosted.
-> Alternatively, if needed, we can let admission add a label on the self-hosted shoot `Gardenlet`s for easy identification.
+> Whether a `Seed` is registered is determined by the presence of `seedTemplate`, **not** by whether the referenced `Shoot` is self-hosted: a `Gardenlet` with `seedTemplate` registers a `Seed` (it is a *seed* `gardenlet`); one without does not (it is a *shoot* `gardenlet`).
+> The distinction matters because a self-hosted shoot can itself be promoted to a seed — see below.
+
+> [!NOTE]
+> **Promoting a self-hosted shoot to a seed.**
+> The cluster's own shoot `gardenlet` keeps its `Gardenlet` resource unchanged (no `seedTemplate`, no `Seed`).
+> Promotion adds a *second* `Gardenlet` resource — the seed `gardenlet` — referencing the same `Shoot` and carrying a `seedTemplate`.
+> The shoot `gardenlet` performs the initial deployment of the seed `gardenlet`; afterwards the seed `gardenlet` self-upgrades. (Today this is done via a `ManagedSeed`.)
 
 ### 2. Mandatory self-upgrade, unified with jitter
 
@@ -110,16 +115,16 @@ This is a precondition for §3 — the central controller can only own `Seed.spe
 All `gardenlet`s converge on: *parent deploys once, `gardenlet` self-upgrades thereafter.*
 For unmanaged seeds the "parent" is `gardener-operator`; for managed seeds it is the `gardenlet` hosting the shoots control plane; for self-hosted shoots the "parent" is the `gardenadm connect` call.
 
-One special case persists for unmanaged seeds, as today: if the seed cluster is not network-reachable from `gardener-operator`, a human operator deploys the `gardenlet` Helm chart into the seed manually, once.
+One special case persists for unmanaged seeds, as today: if the seed cluster is not network-reachable from `gardener-operator`, the `gardenlet` Helm chart is deployed into the seed manually, once (by a person or by some external automation).
 From then on, the mandatory self-upgrade mechanism takes over — the `Gardenlet` resource is created and the `gardenlet`'s lifecycle is managed centrally from the garden cluster via that resource.
-The initial deployer differs (operator vs. human); the steady state does not.
+The initial deployer differs (`gardener-operator` vs. a manual/out-of-band deployment); the steady state does not.
 
 > [!IMPORTANT]
-> Besides deploying the `gardenlet` Helm chart into the seed cluster, the human operator will also need to create the `Gardenlet` resource in the garden cluster.
+> Besides deploying the `gardenlet` Helm chart into the seed cluster, this manual deployment must also create the `Gardenlet` resource in the garden cluster.
 > The `gardenlet` will no longer be able to self-create it via today's `gardenlet-selfupgrade-config` `ConfigMap` indirection.
 
 The self-upgrade controller re-applies the Helm chart idempotently each `SyncPeriod`.
-Today it has **no jitter** — only the `ManagedSeed` controller staggers work: the parent `gardenlet` delays each `ManagedSeed` reconciliation by a random offset within a configurable window (default `SyncJitterPeriod` `5m`), so that many managed seeds upgrades hit `gardener-apiserver` at the same instant.
+Today it has **no jitter** — only the `ManagedSeed` controller staggers work: the parent `gardenlet` delays each `ManagedSeed` reconciliation by a random offset within a configurable window (default `SyncJitterPeriod` `5m`), so that managed seed upgrades do *not* all hit `gardener-apiserver` at the same instant.
 In the new model, there is no parent doing this centrally; instead each `gardenlet` jitters its *own* self-upgrade — it independently draws a random delay within the configurable window before (re-)applying its chart.
 The staggering is thus decentralized across the fleet rather than orchestrated by a parent, but the net effect is the same as today: upgrades spread evenly over the window instead of thundering in together.
 
@@ -193,16 +198,22 @@ Moving spec ownership to the central controller breaks that coupling: an operato
 Today's invariant to preserve: **a `gardenlet` only ever reconciles a `Seed.spec` applied for its own running version.**
 
 A handshake via annotations on the `Seed` enforces this.
-The `gardenlet` knows its own image (injected as an env var at deployment via its Helm chart).
-On startup, instead of running `registerSeed`, it sets `seed.gardener.cloud/ready-for-update: "<current-image>"` annotation on its `Seed`, and **waits — it does not start its controllers until that annotation is removed.**
+The `gardenlet` knows its own image — the image reference (repository plus tag/digest) of its own running deployment, injected as an env var at deployment time via its Helm chart.
+On startup, instead of running `registerSeed`, it sets `seed.gardener.cloud/ready-for-update: "<current-image>"` annotation on its `Seed` (where `<current-image>` is that running image reference), and **waits — it does not start its controllers until that annotation is removed.**
 
-The central controller reacts to the annotation by comparing the `gardenlet`'s desired image (`Gardenlet.spec.deployment`) against the annotation's value (the running image):
+Two annotations are involved: `seed.gardener.cloud/ready-for-update` (transient, set by the `gardenlet` on startup, carrying its running image) and `seed.gardener.cloud/applied-image` (persistent, maintained by the controller, recording the image the current `Seed.spec` was applied for).
 
-- **Match** → the running `gardenlet` is on the desired version: apply the pending `seedTemplate` to `Seed.spec` (if any), and remove `ready-for-update` annotation. The `gardenlet` then starts its controllers.
+The central controller reacts to `ready-for-update` by comparing the `gardenlet`'s desired image (`Gardenlet.spec.deployment`) against the annotation's value (the running image):
+
+- **Match** → the running `gardenlet` is on the desired version: apply the pending `seedTemplate` to `Seed.spec` (if any), set `applied-image` to that image, and remove `ready-for-update`. The `gardenlet` then starts its controllers.
 - **Mismatch** → the `gardenlet` is still on the old version: just remove the `ready-for-update` annotation to allow `gardenlet` to start, but don't change `Seed.spec`. The `gardenlet` self-upgrades eventually, restarts on the new image, and re-runs the handshake.
 
-**Spec-only changes** (no image bump) skip the handshake: the `gardenlet` is already running.
-The controller sees `Gardenlet.spec.deployment` image equal to the applied-image annotation and applies the new `seedTemplate` to `Seed.spec` directly; the running `gardenlet` picks it up from the `Seed` it watches.
+Because every image change restarts the `gardenlet` and thus triggers a fresh handshake, `applied-image` always tracks the running `gardenlet`'s image once a handshake has completed.
+
+**Spec-only changes** (no image bump) skip the handshake: the `gardenlet` is already running and does not restart, so it never sets `ready-for-update`.
+The controller instead compares the desired image (`Gardenlet.spec.deployment`) against `applied-image`:
+- Equal → the running `gardenlet` is already on the desired version, so the new `seedTemplate` is applied to `Seed.spec` directly; the running `gardenlet` picks it up from the `Seed` it watches.
+- Not equal → an image bump is still pending (the old `gardenlet` has not self-upgraded yet); the controller holds the spec change until the next handshake applies image and spec together.
 
 The protocol is idempotent: the annotation value is a function of the current state, so crashes on either side, repeated reconciles, and rapid successive updates all converge — the latest spec is applied once the gardenlet reports the desired image.
 
@@ -211,6 +222,11 @@ The protocol is idempotent: the annotation value is a function of the current st
 Each `gardenlet` jitters its own self-upgrade: on every sync it computes a random delay within a configurable window before (re-)applying its chart.
 This replaces today's parent-driven staggering with a decentralized equivalent — no central component coordinates the fleet, yet upgrades still spread evenly over the window.
 Newly created resources reconcile immediately (no jitter on first deployment), and spec-driven changes are not delayed; only the periodic self-upgrade re-applies are jittered.
+
+### Migration
+
+The concrete migration steps are determined during implementation.
+The goal is to minimize user impact — e.g. auto-creating `Gardenlet` resources for existing `ManagedSeed`s — but users will still need to adapt their workflows to the `Gardenlet` API before the `ManagedSeed` API is removed.
 
 ## Drawbacks
 
@@ -223,7 +239,7 @@ Newly created resources reconcile immediately (no jitter on first deployment), a
 
 ## Risks and Mitigations
 
-- **Central controller as a new failure domain for `Seed` creation.** Mitigate by keeping its logic minimal (spec copy from `seedConfig`) and idempotent, and surfacing failures on the `Gardenlet` status.
+- **Central controller as a new failure domain.** It gates both `Seed` creation and every subsequent update — a `gardenlet` blocks on the [update handshake](#the-update-handshake) until the controller gives its "go", so an unavailable controller stalls startups and spec rollouts. Mitigate by keeping its logic minimal (spec copy from `seedTemplate`) and idempotent, surfacing failures on the `Gardenlet` status, and ensuring the handshake fails safe (the `gardenlet` keeps running its last-known-good spec rather than being blocked indefinitely).
 - **Migration races** between the converter, the parent `gardenlet`, and the new `Seed` desired-state owner. Mitigate with a phased, feature-gated rollout, converting resources before disabling the `gardenlet`'s self-registration of `Seed.spec`.
 
 ## Alternatives
