@@ -1,0 +1,15 @@
+title: "Unify Gardenlet Lifecycle"
+gep-number: 0083
+authors:
+- "@rfranzke"
+steering-link: ""
+status: provisional
+creation-date: 2026-10-05
+reviewers:
+- "@ScheererJ"
+- "@timuthy"
+- "@timebertt"
+approvers:
+- "@ScheererJ"
+- "@timuthy"
+- "@timebertt"
