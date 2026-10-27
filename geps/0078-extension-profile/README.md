@@ -624,7 +624,7 @@ sequenceDiagram
   Owner->>API: create/update Shoot<br/>(extensions[].components[].version=3.1.4, autoUpdate=patch)
   API->>CAT: look up component version 3.1.4 for this type
   CAT-->>API: entry + lifecycle + compatibility
-  API->>API: validate: classification ∈ {preview,supported,deprecated}<br/>(only when version changes)<br/>+ compatibility.validations[] CEL — old-vs-new,<br/>reject only a newly introduced violation
+  API->>API: validate: classification ∈ {preview,supported,deprecated}<br/>(only when version changes)<br/>+ compatibility.validations[] CEL - old-vs-new,<br/>reject only a newly introduced violation
   API-->>Owner: accepted / rejected
 
   loop every reconcile
@@ -633,14 +633,14 @@ sequenceDiagram
   end
 
   loop maintenance window
-    GCM->>GCM: on one working copy: OS, then Kubernetes,<br/>then components — find highest permitted version,<br/>evaluating compatibility CEL against the mutated copy
+    GCM->>GCM: on one working copy: OS, then Kubernetes,<br/>then components - find highest permitted version,<br/>evaluating compatibility CEL against the mutated copy
     alt newer compatible version available AND autoUpdate.enabled
       GCM->>GCM: set spec.extensions[].components[].version on the copy
     end
     alt current version expired (even if autoUpdate.enabled=false)
       GCM->>GCM: force-upgrade to highest supported, compatible patch<br/>of current minor, else next minor (GEP-5)
     end
-    GCM->>API: single Update of the working copy<br/>(dry-run first; on reject, fail the window — nothing written)
+    GCM->>API: single Update of the working copy<br/>(dry-run first - abort window on rejection)
   end
 
   GL->>API: watch Shoot
