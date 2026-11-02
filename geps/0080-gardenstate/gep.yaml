@@ -1,0 +1,15 @@
+title: GardenState
+gep-number: 0080
+authors:
+- "@LucaBernstein"
+steering-link:
+status: provisional
+creation-date: 2026-11-02
+reviewers:
+- "@ScheererJ"
+- "@timuthy"
+- "@timebertt"
+approvers:
+- "@ScheererJ"
+- "@timuthy"
+- "@timebertt"
