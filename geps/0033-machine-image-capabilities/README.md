@@ -316,12 +316,12 @@ Each provider extension must validate its part of the cloud profile to ensure th
 
 The algorithm to determine if an image is valid for a machine type is given as follows: 
 
-For every capability the union of values that is supported by the machine type and the machine image must not be empty.
+For every capability the intersection of values that is supported by the machine type and the machine image must not be empty.
 In other words, the machine image must support at least one value of each capability of the machine type.
 
 ```js
 for capabilityName, machineCapabilities in machineType.capabilities:
-  if union(imageVersion.capabilities[capabilityName], machineCapabilities) is empty:
+  if intersection(imageVersion.capabilities[capabilityName], machineCapabilities) is empty:
     return false
       
 return true
@@ -368,7 +368,7 @@ This limit is configurable through --max-request-bytes flag for etcd server. - [
 
 Every Capability must be defined in a way that each value is framed positively.
 This means that a capability must define all values that are supported by the machine image or machine type.
-This way the capability values can be matched using a union operation.
+This way the capability values can be matched using an intersection operation.
 With a mixed or boolean framing its harder to compare values in a consistent way or to add a new value as option to the capability.
 
 E.g. Disc Controller Types:
