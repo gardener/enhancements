@@ -368,7 +368,7 @@ This limit is configurable through --max-request-bytes flag for etcd server. - [
 
 Every Capability must be defined in a way that each value is framed positively.
 This means that a capability must define all values that are supported by the machine image or machine type.
-This way the capability values can be matched using a union operation.
+This way the capability values can be matched using an intersection operation.
 With a mixed or boolean framing its harder to compare values in a consistent way or to add a new value as option to the capability.
 
 E.g. Disc Controller Types:
