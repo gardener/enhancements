@@ -2,7 +2,7 @@ title: Observability Extension for Gardener
 gep-number: 0084
 authors:
 - "@cerealsnow"
-steering-link:
+steering-link: https://gardener.cloud/community/steering/0084-observability-extension-for-gardener/
 status: provisional
 creation-date: 2026-10-05
 reviewers:

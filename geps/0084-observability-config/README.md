@@ -2,68 +2,80 @@
 
 ## Summary
 
-This GEP proposes a new extension `gardener-extension-observability-config` of type `observability` in the Gardener organization. It deploys a mutating admission webhook which injects additional configuration into the `OpenTelemetryCollector` resources Gardener deploys. The injected configuration can add to and override Gardener's collector configuration. The extension deploys no additional collectors.
+This GEP proposes a new extension `gardener-extension-observability-config` of type `observability-config` in the Gardener organization. Its mutating admission webhooks inject operator configuration into the `OpenTelemetryCollector` resources Gardener deploys, adding to or overriding Gardener's configuration. The extension deploys no additional collectors.
 
-Operators configure the extension via the `providerConfig` in the `Garden` and `Seed` resources. Shoot owners cannot configure it. The `Seed` carries one configuration for its own collector and one for the shoot control plane collectors, which reaches them during the reconciliation of each shoot. Shoot owners who want custom configuration for the signals of their control plane use the existing [`gardener-extension-otelcol`](https://github.com/gardener/gardener-extension-otelcol), which deploys an additional collector for them. For now this targets only logs, but the mechanism is signal-agnostic and covers metrics once Gardener routes them through the collectors.
+Operators configure the extension in the `Garden` and `Seed` resources. The `Seed` carries one configuration for its own collector and one for the shoot control plane collectors. Each change creates a new immutable version. A shoot control plane is pinned to a version during the reconciliation of its shoot, so a change reaches the shoot control planes one shoot reconciliation at a time. The extension does not appear in the `Shoot` resource, so shoot owners can neither configure nor disable it.
 
 ## Motivation
 
 With the `OpenTelemetryCollector` feature gate, Gardener deploys an `OpenTelemetryCollector` per shoot control plane namespace and one in the `garden` namespace of seeds and of the garden runtime cluster. Per [GEP-34](../0034-observability2.0-opentelemetry/README.md), these collectors are the abstraction layer for observability signals, which makes them a stable entry point for operators.
 
-Operators may have requirements for the signals collected in their setup that go beyond what Gardener provides out of the box. A common one may be shipping logs to a custom backend, for example a central log store outside of Gardener. Another one is processing logs before they leave the cluster, for example attaching landscape-specific attributes (e.g., the stage). Gardener fully owns the collector configuration, so there is no extension point for this. This was discussed in [gardener/gardener#15700](https://github.com/gardener/gardener/issues/15700), where the consensus was to create a new extension that offers an entry point into configuring the Gardener-owned collectors.
+Operators may need more than Gardener provides out of the box. Examples are shipping logs to a central log store outside of Gardener and attaching landscape-specific attributes, such as the stage, before logs leave the cluster. Gardener fully owns the collector configuration and offers no extension point for this. In [gardener/gardener#15700](https://github.com/gardener/gardener/issues/15700), the consensus was to create a new extension that offers this entry point.
 
 ### Goals
 
-- Introduce `gardener-extension-observability-config` as a new extension of type `observability` in the Gardener organization.
-- Allow operators to add custom configuration to the collectors Gardener deploys, reusing the receivers Gardener already configures.
-- Apply configuration at the `Garden` and `Seed` level, covering the `garden` namespace collectors and all shoot control plane collectors on a seed without per-shoot configuration.
-- Roll out `Seed`-level changes to the shoot control plane collectors during shoot reconciliation.
-- Keep the API signal-agnostic so that the same mechanism covers metrics and traces once Gardener routes them through the collectors.
+- Let operators add configuration to the collectors Gardener deploys, reusing the receivers Gardener already configures.
+- Configure the `garden` namespace collectors and all shoot control plane collectors of a seed at `Garden` and `Seed` level, without per-shoot configuration and without appearing in the `Shoot` resource.
+- Roll out `Seed` changes to a shoot control plane collector only during the reconciliation of its shoot.
+- Keep the API signal-agnostic, so that it covers metrics and traces once Gardener routes them through the collectors.
 
 ### Non-Goals
 
-- Configuration by shoot owners. Shoot owners use `gardener-extension-otelcol` instead (see [Alternatives](#alternatives)).
-- Changing how Gardener collects or stores signals (fluent-bit, the `gardener` plugin).
-- Modelling the OpenTelemetry Collector configuration in a Gardener-specific API. The extension passes configuration fragments through.
-- Validating the OpenTelemetry Collector configuration beyond its structure.
-- Replacing `gardener-extension-otelcol`.
-- Deploying additional collectors.
+- Configuration by shoot owners. They use [`gardener-extension-otelcol`](https://github.com/gardener/gardener-extension-otelcol), which this extension does not replace (see [Alternatives](#alternatives)).
+- Changing how Gardener collects or stores signals.
+- Modelling the OpenTelemetry Collector configuration in a Gardener API or validating it beyond its structure.
 - Metrics and traces in the first iteration.
 
 ## Proposal
 
-The `OpenTelemetryCollector` resources Gardener deploys are the extension point. The extension extends their configuration instead of deploying anything next to them.
+The extension builds on the `OpenTelemetryCollector` resources Gardener deploys and extends their configuration without deploying additional collectors. Gardener deploys the collectors via `ManagedResource`s, and `gardener-resource-manager` replaces their `.spec` with Gardener's desired state on every write, so it would revert any patch. Instead, a mutating admission webhook injects the configuration whenever a collector is written.
 
-Since `gardener-resource-manager` would revert changes to the collectors, a mutating admission webhook injects the configuration on every apply.
+Operators can inject `processors`, `exporters`, `connectors`, `extensions`, `service.pipelines` and `service.extensions` into the configuration of Gardener's collectors. Receivers cannot be added: Gardener's collectors are meant for the signals Gardener emits, and other signals belong in a separate collector.
 
-The webhook adds processors, exporters, connectors, pipelines and collector extensions. Receivers cannot be added. Gardener's collectors are meant for the signals Gardener emits. Other signals belong in a separate collector. Injected components may override Gardener's components of the same name (see [API](#api)).
+The extension has a `garden` and a `seed` class, but no `shoot` class. All collectors receive their configuration through immutable versions in the `garden` namespace. A version consists of one `ConfigMap` with the configuration and one snapshot of each referenced `Secret` or `ConfigMap`. An annotation on the namespace of a collector pins it to a version. The collector webhook injects the pinned version, and the extension controller triggers a write of the collector when the pin changes.
 
-The extension has three classes, which share the webhook and differ in where the configuration comes from:
+Gardener's network policies only allow the collectors to reach the in-cluster log backends, DNS and the `kube-apiserver`. To reach custom backends, the webhook sets the labels `networking.gardener.cloud/to-public-networks: allowed` and `networking.gardener.cloud/to-private-networks: allowed` as configured in `networking` and removes them otherwise, since `gardener-resource-manager` keeps labels it does not manage.
 
-- Operators configure the `garden` class in `Garden.spec.extensions[]`. It covers the collector in the `garden` namespace of the garden runtime cluster.
-- Operators configure the `seed` class in `Seed.spec.extensions[]`. It covers the collector in the `garden` namespace of the seed (`collector`). It also carries the configuration for the shoot control plane collectors on the seed (`shootCollectors`).
-- The `shoot` class has no configuration of its own. During shoot reconciliation, it fetches `shootCollectors` from the `seed` class for the shoot control plane collector (see [Rollout](#rollout)). Operators enable it for all shoots with `autoEnable: [shoot]` in the extension registration (see [Extension Registration](#extension-registration)). Shoot owners can neither enable nor disable it.
+### Garden Runtime Cluster
 
-Every class writes the configuration for its collector into the status of its `Extension` resource. The webhook only reads the status of the `Extension` resource in the namespace of the collector it mutates (see [Webhook](#webhook)). Without such an `Extension` resource or with an empty status, nothing is injected.
+Operators configure the collector in the `garden` namespace of the garden runtime cluster via `collector` in the `providerConfig` in `Garden.spec.extensions[]`. During the `Garden` reconciliation, `gardener-operator` deploys the `Extension` resource `garden-observability-config`, and the extension controller creates the version, pins the `garden` namespace to it and triggers the collector. A change, including one of a referenced resource, thus reaches the collector with the next `Garden` reconciliation. `gardener-operator` deploys the collector independently of the extension, so the collector may run without the configuration until the extension is reconciled for the first time.
 
-If the runtime cluster is also a seed, the extension runs twice there, once deployed by `gardener-operator` for the `Garden` and once by gardenlet for the `Seed`. There is one collector in the `garden` namespace, deployed by `gardener-operator`, and it receives the `collector` configuration of the `Garden` only. Gardenlet passes `gardener.clusterTypes.gardenRuntimeCluster: true` to the Helm chart of the seed deployment. With this value, the `seed` class ignores `collector`, writes no `collector` status, copies no secrets for it and sets a condition on its `Extension` resource that says so. Its webhook only serves the shoot control plane namespaces. `shootCollectors` of that `Seed` still applies to the shoot control plane collectors.
+### Seed
 
-Gardener's network policies allow the collectors to reach only the in-cluster log backends, DNS and the `kube-apiserver`. To reach custom backends, the webhook adds the label `networking.gardener.cloud/to-public-networks: allowed` when `networking.allowPublicNetworks` is set and `networking.gardener.cloud/to-private-networks: allowed` when `networking.allowPrivateNetworks` is set. `gardener-resource-manager` keeps labels it does not manage, so the webhook removes the labels when the fields are not set.
+Operators configure the collector in the `garden` namespace of a seed via `collector` in the `providerConfig` in `Seed.spec.extensions[]`. During the `Seed` reconciliation, gardenlet deploys the `Extension` resource `observability-config` and waits until it is ready before it deploys the collector. The extension controller proceeds as for the `Garden`.
+
+### Shoot Control Planes
+
+Only the `Seed` configures the shoot control plane collectors, via `shootCollectors` in the same `providerConfig`. There is no per-shoot configuration, and the `Garden` has no `shootCollectors`.
+
+A broken configuration must not break the collectors of all shoots on a seed at once. Each shoot control plane therefore picks up a change only during the reconciliation of its shoot:
+
+1. During the `Seed` reconciliation, the extension controller creates the version of `shootCollectors` and copies its snapshots into all shoot control plane namespaces on the seed. Then it records the version as current in the status of its `Extension` resource.
+2. At the start of every shoot reconciliation, gardenlet patches the shoot control plane namespace, even if nothing changed. Mutating admission webhooks are called for every patch, including an empty one, so the namespace webhook pins the namespace to the current version.
+3. The extension controller notices the changed pin and triggers the collector.
+
+The namespace patch is the first step of the shoot reconciliation, so the pin is set before gardenlet deploys the collector, and no new lifecycle constraint for extensions is needed.
+
+Between two reconciliations of its shoot, a shoot control plane keeps its version, including the snapshots of the referenced resources, so a rotated credential also arrives only with the next reconciliation. Several versions can thus be in use on a seed at the same time. At its next reconciliation, a shoot moves straight to the current version and skips any intermediate ones.
+
+A shoot control plane namespace created after the last `Seed` reconciliation, e.g., for a new shoot or after a control plane migration, is pinned to the current version on creation. The extension controller then copies the snapshots into it, and the collector pods start once their snapshots exist.
+
+### Garden Runtime Cluster that is also a Seed
+
+On such a cluster, the extension runs twice, deployed by `gardener-operator` for the `Garden` and by gardenlet for the `Seed`, but there is only one collector in the `garden` namespace. Merging both configurations for this collector would be confusing, so the `Garden` takes precedence. The collector in the `garden` namespace receives `collector` of the `Garden`, while the shoot control plane collectors receive `shootCollectors` of the `Seed`. gardenlet passes `gardener.clusterTypes.gardenRuntimeCluster: true` to the seed deployment, so the `seed` class ignores `collector` of the `Seed` and reports this in a condition on its `Extension` resource. The documentation of the extension describes this setup.
 
 ### Notes/Constraints/Caveats
 
-- Operators can only use processors, exporters, connectors and collector extensions contained in the collector image. By default this is the [Gardener OpenTelemetry Collector distribution](https://github.com/gardener/opentelemetry-collector/blob/main/manifest.yml). Since the extension only acts on `Seed` and `Garden` level, operators can replace the collector image with one that contains further components, e.g., the full `opentelemetry-collector-contrib` distribution.
-- Injected pipelines reference Gardener's receivers and exporters by name. Gardener should document these names as a stable interface for extensions (see [Required Changes in gardener/gardener](#required-changes-in-gardenergardener)).
-- A `Seed`-level change, including a change of a referenced secret, reaches a shoot control plane collector during the next reconciliation of that shoot. Changes to the `Seed` do not trigger shoot reconciliations.
-- `autoEnable: [shoot]` cannot be restricted to the shoots of selected seeds. On seeds that do not list the extension, the webhook changes nothing.
-- All signals arriving at a collector are included. For a shoot control plane collector, these are the control plane logs, the logs of the Gardener-managed components in the shoot `kube-system` namespace and the logs of the shoot node systemd units.
+- Operators can only use components contained in the collector image, by default the [Gardener OpenTelemetry Collector distribution](https://github.com/gardener/opentelemetry-collector/blob/main/manifest.yml). They can replace the image, e.g., with the full `opentelemetry-collector-contrib` distribution.
+- `Seed` changes do not trigger shoot reconciliations. Depending on the gardenlet configuration and the maintenance settings of a shoot, it is reconciled periodically or only in its maintenance time window. Failed and ignored shoots keep their pin.
 
 ### Risks and Mitigations
 
-- An invalid configuration prevents the collector from starting, so Gardener's own pipelines stop too. The extension only validates the structure of the fragment and the referenced secrets (see [Validation](#validation)). Errors inside the configuration only show up when the collector starts.
-- Injected pipelines share the receiver with Gardener's pipelines. Additional processors and exporters increase the resource consumption of the collector and can degrade its performance. A custom backend that is unavailable or misbehaves can degrade all pipelines of the collector, including Gardener's.
-- Overriding Gardener's components replaces their configuration entirely. A broken override breaks Gardener's own pipelines.
-- The webhook uses `failurePolicy: Ignore`, so an outage of the webhook does not block the `Garden`, `Seed` and shoot reconciliations. During the outage `gardener-resource-manager` applies the collectors without the custom configuration. The controller detects this, triggers the webhook again and fails the reconciliation of the `Extension` resource until the configuration is back (see [Rollout](#rollout)).
+- An invalid configuration or a broken override of a Gardener component keeps the collector from starting, which stops Gardener's own pipelines too. Pinning limits the impact of a `shootCollectors` change to the shoots reconciled since the change. Operators have to test configuration changes themselves.
+- Injected pipelines share the receiver and the resources of the collector with Gardener's pipelines. Additional processing or an unavailable or misbehaving custom backend can degrade all pipelines of the collector, including Gardener's.
+- The collector webhook uses `failurePolicy: Fail`, so a collector is never written without its pinned configuration. While the webhook is unavailable, `gardener-resource-manager` cannot write the collectors: running collectors keep their configuration, but Gardener's changes wait and the collectors of new shoots are not created. The failed writes show up in the `ObservabilityComponentsHealthy` condition of the shoot.
+- The namespace webhook uses `failurePolicy: Ignore`, since a failing namespace patch would fail every shoot reconciliation on the seed. While it is unavailable, namespaces keep their pin, and new namespaces stay unpinned, so their collectors run without the custom configuration until the next reconciliation of the shoot.
+- gardenlet waits for the `Extension` resource of class `seed` before it deploys the seed system components. A shoot control plane namespace that the snapshots cannot be copied into blocks the `Seed` reconciliation. To avoid this for shoots that are being deleted, the extension controller skips terminating namespaces.
 
 ## Design Details
 
@@ -77,27 +89,21 @@ metadata:
 spec:
   resources:
     - kind: Extension
-      type: observability
+      type: observability-config
       primary: true
-      # Set by the operator to configure all shoot control plane collectors.
-      autoEnable:
-        - shoot
       clusterCompatibility:
         - garden
         - seed
-        - shoot
-      # Workerless shoots also have a control plane collector.
-      workerlessSupported: true
 ```
 
-The extension controller reconciles the `Extension` resources of all three classes and serves the mutating webhook (see [Webhook](#webhook)). The admission component validates `Seed`s, `Garden`s and `Shoot`s (see [Validation](#validation)).
+The extension controller reconciles the `Extension` resources of both classes and serves the webhooks. The admission component validates `Garden`s and `Seed`s. Since `clusterCompatibility` does not contain `shoot`, Gardener rejects `Shoot`s that list `observability-config` and installs the extension only on seeds that list it in `Seed.spec.extensions[]`.
 
 ### API
 
-The `providerConfig` is of kind `ObservabilityConfig` in the API group `observability.extensions.gardener.cloud`. `config` is plain OpenTelemetry Collector configuration.
+The `providerConfig` is of kind `ObservabilityConfig` in the API group `observability.extensions.gardener.cloud`.
 
 ```go
-// ObservabilityConfig is the providerConfig of the observability extension.
+// ObservabilityConfig is the providerConfig of the observability-config extension.
 type ObservabilityConfig struct {
   metav1.TypeMeta
 
@@ -105,23 +111,18 @@ type ObservabilityConfig struct {
   // garden namespace.
   Collector *CollectorSpec
   // ShootCollectors configures what the webhook injects into the shoot
-  // control plane collectors on the seed. Only allowed in a Seed. If unset,
-  // the shoot control plane collectors are left unchanged.
+  // control plane collectors on the seed. If unset, nothing is injected.
   ShootCollectors *CollectorSpec
 }
 
 // CollectorSpec describes what is added to a collector.
 type CollectorSpec struct {
-  // Config is a piece of OpenTelemetry Collector configuration that is added
-  // to .spec.config of the collector. Allowed top-level keys are processors,
-  // exporters, extensions, connectors and service. Under service, only
-  // pipelines and extensions are allowed. Receivers cannot be configured.
+  // Config is plain OpenTelemetry Collector configuration that is merged into
+  // .spec.config of the collector.
   Config runtime.RawExtension
-  // Secrets are names of entries in .spec.resources of the Garden or Seed.
-  // Each listed secret is mounted into the collector at
-  // /etc/observability/<name>/. Config reads the files, e.g., via
-  // ${file:/etc/observability/<name>/<key>}.
-  Secrets []string
+  // Resources names entries in .spec.resources of the Garden or Seed that are
+  // mounted into the collector.
+  Resources []string
   // Networking configures the egress of the collector.
   Networking *NetworkingSpec
 }
@@ -129,42 +130,33 @@ type CollectorSpec struct {
 // NetworkingSpec describes which networks the collector may reach.
 type NetworkingSpec struct {
   // AllowPublicNetworks allows the collector to reach public networks.
-  AllowPublicNetworks bool
+  AllowPublicNetworks *bool
   // AllowPrivateNetworks allows the collector to reach private networks.
-  AllowPrivateNetworks bool
+  AllowPrivateNetworks *bool
 }
 
-// ObservabilityStatus is the providerStatus of the Extension resources of all
+// ObservabilityStatus is the providerStatus of the Extension resources of both
 // classes.
 type ObservabilityStatus struct {
   metav1.TypeMeta
 
-  // Collector is the configuration the webhook injects into the collector in
-  // the namespace of the Extension resource.
-  Collector *CollectorSpec
-  // ShootCollectors is the configuration the shoot class picks up. Only set
+  // CollectorVersion is the version of Collector the collector in the garden
+  // namespace is pinned to.
+  CollectorVersion *string
+  // ShootCollectorsVersion is the current version of ShootCollectors. The
+  // namespace webhook pins the shoot control plane namespaces to it. Only set
   // by the seed class.
-  ShootCollectors *CollectorSpec
+  ShootCollectorsVersion *string
 }
 ```
 
-The webhook adds `config` to `.spec.config` of the collector.
+Injected components and pipelines are added next to Gardener's, and `service.extensions` is appended to Gardener's list. An injected component or pipeline with the name of an existing one replaces Gardener's entirely, at the operator's own risk. Injected pipelines may reference Gardener's receivers and exporters by name.
 
-- The webhook adds processors, exporters, extensions, connectors and pipelines next to Gardener's and appends `service.extensions` to Gardener's list. Injected pipelines may reference Gardener's receivers and exporters by name.
-- If a name already exists in the collector, the injected component replaces Gardener's component entirely. Overriding Gardener's components is at the operator's own risk.
-
-Credentials come from [referenced resources](https://github.com/gardener/gardener/blob/master/docs/extensions/referenced-resources.md), which the webhook mounts as files.
-
-1. The operator lists a `Secret` in `.spec.resources` of the `Seed` or `Garden`.
-2. `secrets` names the entry, e.g., `central-loki`.
-3. `config` reads the files, e.g., `${file:/etc/observability/central-loki/password}` or `ca_file: /etc/observability/central-loki/ca.crt`.
-4. For a `Seed`, gardenlet copies the referenced `Secret` into the `garden` namespace as `ref-<name>`. For a `Garden`, the referenced `Secret` already lives in the `garden` namespace. The extension controller copies it from there into the namespace of the collector (see [Rollout](#rollout)) and the webhook mounts the copy.
-
-Operators only deal with entry names, so the same `CollectorSpec` works in `collector` and `shootCollectors` and in the `Garden` and the `Seed`.
+Credentials come from [referenced resources](https://github.com/gardener/gardener/blob/master/docs/extensions/referenced-resources.md). The operator lists a `Secret` or `ConfigMap` in `.spec.resources` of the `Garden` or `Seed` and names the entry in `resources`, e.g., `central-loki`. The webhook mounts it at `/etc/observability/central-loki/`, where `config` reads it, e.g., via `${file:/etc/observability/central-loki/password}`. Since operators only deal with entry names, the same `CollectorSpec` works in `collector` and `shootCollectors` and in the `Garden` and the `Seed`. gardenlet copies the referenced objects of a `Seed` into the `garden` namespace as `ref-<object name>`, while `gardener-operator` uses those of a `Garden` in place.
 
 #### Example
 
-The following `Seed` sends the logs of all shoot control planes on the seed to a central Loki via OTLP. A `resource` processor adds the attribute `stage` to every log. The Loki credentials come from the secret `central-loki-credentials`, which is referenced as `central-loki` in `.spec.resources`. `networking.allowPublicNetworks` lets the collectors reach the Loki endpoint. The same configuration under `collector` would apply to the collector in the `garden` namespace.
+The following `Seed` sends the logs of all its shoot control planes to a central Loki via OTLP and adds the attribute `stage` to every log. The Loki credentials come from the referenced secret `central-loki-credentials`.
 
 ```yaml
 apiVersion: core.gardener.cloud/v1beta1
@@ -173,12 +165,12 @@ metadata:
   name: seed-eu01
 spec:
   extensions:
-    - type: observability
+    - type: observability-config
       providerConfig:
         apiVersion: observability.extensions.gardener.cloud/v1alpha1
         kind: ObservabilityConfig
         shootCollectors:
-          secrets:
+          resources:
             - central-loki
           networking:
             allowPublicNetworks: true
@@ -215,91 +207,99 @@ spec:
         name: central-loki-credentials
 ```
 
-### Rollout
+### Versions and Rollout
 
-The extension controller reconciles the `Extension` resources of all three classes with the same steps. The `garden` and `seed` classes take the configuration from their `providerConfig`, the `shoot` class from `shootCollectors` in the status of the `Extension` resource of class `seed`. Secrets come from the referenced resources in the `garden` namespace.
+#### Versions
 
-For every reconciliation, the controller
+The name of a version is a checksum over the class, the `CollectorSpec` and the data of its referenced resources, so every change, including a rotated credential, creates a new version, and the two classes never share one. In the `garden` namespace, a version consists of the immutable `ConfigMap` `observability-config-<version>`, which contains the `CollectorSpec`, and one immutable snapshot `observability-config-<version>-<name>` per referenced resource, of the same kind as the original. All objects of a version are labelled with its class. The annotation `observability.extensions.gardener.cloud/version: <version>` pins a namespace to a version.
 
-1. copies each secret in `secrets` into the namespace of the `Extension` resource as `observability-<name>`,
-2. writes the configuration to `collector` in the status of the `Extension` resource (the `seed` class also writes `shootCollectors`),
-3. sends an empty patch to the collector in the namespace, which triggers the webhook (see [Webhook](#webhook)),
-4. deletes secret copies that are no longer listed once the collector no longer mounts them.
+In a shoot control plane namespace, the snapshots are the content of the `ManagedResource` `observability-config`, labelled `care.gardener.cloud/condition-type: ObservabilityComponentsHealthy`. `gardener-resource-manager` thus deletes snapshots that are removed from it and reports failures in the `ObservabilityComponentsHealthy` condition of the shoot. The controller records a version as current only after its snapshots are applied, so the namespace webhook pins existing namespaces only to versions whose snapshots they already contain.
 
-This order means the webhook never mounts a secret that does not exist yet. If no `Extension` resource of class `seed` exists or its status has no `shootCollectors`, the `shoot` class writes an empty status and the webhook removes everything it injected before.
+#### Triggering the Collector
 
-Gardenlet reconciles the `Extension` resources of class `shoot` as part of the shoot reconciliation, so a `Seed`-level change reaches the shoot control plane collectors one shoot at a time. The `seed` and `garden` classes are reconciled during the `Seed` and `Garden` reconciliation.
+The collector webhook only acts when a collector is written, but a shoot reconciliation that does not change Gardener's collector configuration does not change its `ManagedResource`. To trigger a collector, the extension controller annotates its `ManagedResource` `opentelemetry-collector` with `gardener.cloud/operation: reconcile`. `gardener-resource-manager` then writes the collector if it differs from Gardener's desired state, which is always the case once it carries injected configuration, and the webhook records the injected version in the annotation `observability.extensions.gardener.cloud/injected-version`. A collector that never received an injection may match Gardener's desired state and not be written. If it does not carry the pinned version afterwards, the controller sends it an empty patch, which passes the webhook as well.
 
-The controller also watches the collector in the namespace of each `Extension` resource and enqueues the `Extension` resource when the collector changes. During the reconciliation, it compares the hash the webhook writes to the pod annotations (see [Webhook](#webhook)) with the hash of the status and the secret copies. If they differ, e.g., because `gardener-resource-manager` applied the collector while the webhook was unavailable, the controller sends the empty patch again. If the collector still lacks the configuration afterwards, the reconciliation fails, so the `Garden`, `Seed` or shoot reconciliation reports the error and retries.
+#### Cleanup
+
+A version is in use while it is current, a namespace is pinned to it or a collector pod mounts one of its snapshots. The extension controller deletes unused versions of its own class, including their snapshots in the shoot control plane namespaces, during every reconciliation of its `Extension` resources and whenever a pin or a collector changes.
 
 #### Deletion
 
-When an operator removes the extension from `Seed.spec.extensions[]`, gardenlet deletes the `Extension` resource of class `seed`. The `shoot` class then runs the steps above with an empty configuration. The controller clears the status, the empty patch makes the webhook remove the injected configuration, the volumes and the network policy labels, and the controller deletes the secret copies once the collector no longer mounts them. The controller does the same for the `garden` namespace collector when gardenlet or `gardener-operator` deletes the `Extension` resource of class `seed` or `garden`. It handles a dropped entry in `secrets` or a dropped `shootCollectors` section the same way.
+When an operator removes the extension from `Seed.spec.extensions[]`, gardenlet deletes the `Extension` resource, and Gardener uninstalls the extension afterwards. Waiting for the reconciliation of every shoot would block this, so the removal applies to all collectors on the seed at once. The namespace webhook stops pinning, and the extension controller removes its pins and triggers the collectors, which `gardener-resource-manager` then writes without the custom configuration. Once no collector pod mounts a snapshot anymore, the controller deletes the snapshots and versions and removes its finalizer. The same applies to the `Garden`. The webhook configurations are removed together with the extension, so the collector webhook with `failurePolicy: Fail` does not outlive it.
+
+Removing only `collector`, `shootCollectors` or an entry in `resources` creates a new version that rolls out like any other change.
 
 ### Validation
 
-The admission component validates the `providerConfig` when a `Garden` or `Seed` is saved and rejects shoots that enable or disable the extension.
+The admission component rejects a `Garden` or `Seed` if
 
-- Only the top-level keys `processors`, `exporters`, `extensions`, `connectors` and `service` are allowed. Under `service`, only `pipelines` and `extensions` are allowed. `receivers` cannot be configured.
-- `shootCollectors` is only allowed in a `Seed`.
-- Every entry in `secrets` must name a `Secret` in `.spec.resources` of the `Garden` or `Seed`. The extension copies and mounts only listed secrets.
-- `Shoot.spec.extensions[]` must not contain an entry of type `observability`. The `shoot` class exists only through `autoEnable`.
+- `config` contains keys other than those listed in the [Proposal](#proposal) or exceeds 64 KiB,
+- a `Garden` sets `shootCollectors`, or
+- an entry in `resources` does not name a `Secret` or `ConfigMap` in `.spec.resources`.
 
-The extension does not validate the content of the components, the component types or the pipeline wiring. Operators may run collector images with a different set of components, so the extension cannot know which component types exist. The collector reports errors when it starts.
+It does not validate the components or the pipeline wiring, since operators may run collector images with other components. The collector reports such errors when it starts.
 
-### Webhook
+### Webhooks
 
-The webhook mutates `OpenTelemetryCollector` resources on `CREATE` and `UPDATE`. It only touches the collectors Gardener deploys.
+The `seed` class serves both webhooks and selects shoot control plane namespaces by the label `gardener.cloud/role: shoot`, since gardenlet sets `extensions.gardener.cloud/<type>` only for extensions enabled for shoots. The `garden` class only serves the collector webhook for the `garden` namespace. The extension uses dedicated webhooks instead of the generic `controlplane` webhook of the extensions library, which is meant for extensions of kind `ControlPlane` and filters by the provider type of a shoot.
 
-- A `namespaceSelector` limits it to the `garden` namespace and to shoot control plane namespaces (label `gardener.cloud/role: shoot`). On a runtime cluster that is also a seed, the seed deployment's webhook serves only the shoot control plane namespaces (see [Proposal](#proposal)).
-- An `objectSelector` limits it to resources with the label `observability.gardener.cloud/app: opentelemetry-collector`.
+#### Namespace Webhook
 
-The webhook reads the `ObservabilityStatus` of the `Extension` resource in the namespace of the collector. In a shoot control plane namespace this is the `Extension` resource of class `shoot`. In the `garden` namespace it is the `Extension` resource of class `garden` (`garden-observability`) on the runtime cluster and the one of class `seed` (`observability`) on a seed. If there is no matching `Extension` resource or its status is empty, the webhook injects nothing and removes what it injected before.
+The namespace webhook mutates shoot control plane `Namespace`s on `CREATE` and `UPDATE` and pins them to `shootCollectorsVersion` of the `Extension` resource of class `seed`. If that resource does not exist, is being deleted or has no `shootCollectorsVersion`, the webhook removes the pin. For `Namespace`s, its `namespaceSelector` matches the labels of the object itself, also on `CREATE`. It uses `failurePolicy: Ignore` (see [Risks and Mitigations](#risks-and-mitigations)).
 
-Mutation is idempotent. The webhook records the names of the injected components, pipelines, extensions and volumes in an annotation on the collector and removes them before injecting the current configuration. This way, components removed from the `providerConfig` disappear with the next empty patch.
+#### Collector Webhook
 
-The webhook mounts the secret copies at `/etc/observability/<name>/` (see [API](#api)), sets the network policy labels depending on `networking` (see [Proposal](#proposal)) and adds a hash of the injected configuration and the secret data to the pod annotations, so that changes roll out new pods.
+The collector webhook mutates `OpenTelemetryCollector` resources with the label `observability.gardener.cloud/app: opentelemetry-collector` in the `garden` namespace and in shoot control plane namespaces on `CREATE` and `UPDATE`. On a garden runtime cluster that is also a seed, the webhook of the seed deployment only serves the shoot control plane namespaces. It uses `failurePolicy: Fail` (see [Risks and Mitigations](#risks-and-mitigations)).
 
-The webhook uses `failurePolicy: Ignore` (see [Risks and Mitigations](#risks-and-mitigations)).
+The webhook reads the pin of the namespace and the `ConfigMap` of the pinned version and merges `config` into `.spec.config` (see [API](#api)). It mounts the snapshots at `/etc/observability/<name>/`, sets the network policy labels and records the injected version. Without a pin, it injects nothing and removes the labels and the annotation. Since `gardener-resource-manager` always writes Gardener's unmodified configuration, removed and overridden components revert with the next write, without bookkeeping in the webhook. A new version mounts snapshots with new names, which changes the pod template, so the collector rolls out new pods.
 
 ### Required Changes in gardener/gardener
 
-- Document the label `observability.gardener.cloud/app: opentelemetry-collector` of the `OpenTelemetryCollector` resource and its receiver and exporter names as a stable interface for extensions.
+- Document the label `observability.gardener.cloud/app: opentelemetry-collector` of the `OpenTelemetryCollector` resource, its receiver and exporter names and the name of its `ManagedResource` `opentelemetry-collector` as a stable interface for extensions.
 
 ## Drawbacks
 
-- The extension mutates resources that Gardener owns. Renames of the collector label, its receivers or its exporters in `gardener/gardener` break the injected pipelines, which is why this GEP asks to document them as a stable interface.
-- With `autoEnable: [shoot]`, the extension is installed on every seed and adds an `Extension` step to the reconciliation of every shoot, even on seeds that do not use it.
-- A misconfigured processor or exporter in `shootCollectors` affects all shoot control plane collectors on the seed, one shoot reconciliation at a time.
+- The extension mutates resources that Gardener owns. Renaming the collector label, its receivers, its exporters or its `ManagedResource` in `gardener/gardener` breaks the extension, which is why this GEP asks to document them as a stable interface.
+- The rollout relies on gardenlet patching the shoot control plane namespace during every shoot reconciliation, which is not documented so far.
+- Urgent changes, e.g., replacing a leaked credential, require the reconciliation of all shoots on the seed.
+- Every new version of `shootCollectors` copies the referenced resources into all shoot control plane namespaces on the seed.
 
 ## Alternatives
 
 ### Extend gardener-extension-otelcol
 
-`gardener-extension-otelcol` already configures exporters via `CollectorConfig.spec.targets`, but it is shoot-spec-driven, requires per-shoot configuration and does not cover the `garden` collectors. It deploys an additional collector, which does not receive the data plane logs from the shoot `kube-system` namespace, and does not modify the collectors Gardener deploys. Letting operators reconfigure the Gardener collectors through it would change its purpose, which is why gardener/gardener#15700 settled on a separate extension.
+`gardener-extension-otelcol` is configured per shoot in the `Shoot` spec, does not cover the `garden` collectors and deploys an additional collector, which does not receive the data plane logs from the shoot `kube-system` namespace. Reconfiguring Gardener's collectors through it would change its purpose, which is why [gardener/gardener#15700](https://github.com/gardener/gardener/issues/15700) settled on a separate extension.
 
-For shoot owners, `gardener-extension-otelcol` stays the way to export signals of their control plane. The additional collector isolates the owner configuration, so a misconfiguration or high signal volumes do not affect the collector Gardener deploys. This is why this GEP does not allow configuration in the `Shoot` spec. Configuration providers such as `${file:...}` or `${env:...}` can read anything the collector pod sees, so shoot owner configuration in Gardener's collectors would need sanitization and guardrails.
+For shoot owners, it stays the way to export the signals of their control plane. Its additional collector isolates their configuration, so a misconfiguration or high signal volumes do not affect the collector Gardener deploys. Shoot owner configuration in Gardener's collectors would also need sanitization and guardrails, since configuration providers such as `${file:...}` or `${env:...}` can read anything the collector pod sees.
 
-### Seed-level controller without a shoot class
+### Roll out Seed changes to all shoots immediately
 
-The `seed` class alone could copy secrets into every shoot control plane namespace and trigger the webhook for all collectors on the seed at once. This rolls out a `Seed` change to all shoots immediately, outside of the shoot reconciliation. It also has to handle shoot namespaces that appear later, e.g., after a control plane migration, and races with gardenlet creating the collector before the secrets are copied. The `shoot` class ties all of this to the shoot reconciliation.
+The collector webhook could read `shootCollectors` directly from the `Extension` resource of class `seed`. A `Seed` change would then reach all shoots at once, and also whenever `gardener-resource-manager` happens to write a collector. A broken configuration would break the collectors of all shoots on the seed at the same time.
+
+### Shoot class
+
+An `Extension` resource of class `shoot` for every shoot, enabled via `autoEnable: [shoot]`, could carry the configuration into each shoot control plane during the shoot reconciliation. This was the previous version of this GEP. The extension would then be visible in every `Shoot`, where shoot owners could try to disable or configure it, which is confusing. It would also install the extension on every seed that hosts shoots and add an `Extension` step to every shoot reconciliation, even on seeds that do not use it.
 
 ### Custom fluent-bit outputs and filters
 
-A custom fluent-bit `ClusterOutput` ships logs directly to a custom backend and `ClusterFilter`s drop or modify logs before that. This couples fluent-bit to the backend, limits processing to what fluent-bit filters can do and bypasses the collectors, which Gardener introduced as the abstraction layer for all signals.
+A custom fluent-bit `ClusterOutput` could ship logs to a custom backend, with `ClusterFilter`s to drop or modify them. This couples fluent-bit to the backend, limits processing to what fluent-bit filters can do and bypasses the collectors, which Gardener introduced as the abstraction layer for all signals.
 
 ### Deploy a dedicated operator-owned collector
 
-An additional collector per seed or per shoot control plane would need either an additional fluent-bit output or an additional exporter in the Gardener collectors pointing to it. The latter again requires mutating their configuration. An additional fluent-bit output would also not include the data plane logs from the shoot `kube-system` namespace, since they arrive at Gardener's collectors directly. It duplicates infrastructure that already receives the signals and adds another component to maintain.
+An additional collector per seed or per shoot control plane would need either an additional fluent-bit output or an exporter in Gardener's collectors. A fluent-bit output misses the data plane logs from the shoot `kube-system` namespace, and an exporter again requires mutating the configuration of Gardener's collectors. It also duplicates infrastructure that already receives the signals.
 
 ### A controller that patches the collectors
 
-Since `gardener-resource-manager` applies the collectors via `ManagedResource`s, it reverts the patch on the next apply and the two components overwrite each other's changes. Making `gardener-resource-manager` ignore parts of the spec would require changes in Gardener core for this one use case.
+`gardener-resource-manager` would revert the patch with its next write of the collector, and the two components would overwrite each other's changes. Making `gardener-resource-manager` ignore parts of the spec would require changes in Gardener core for this one use case.
 
 ### Model the extension point in Gardener core
 
-`gardenlet` and `gardener-operator` could render additional collector pipelines from a field in the `Seed` and `Garden` APIs. This puts landscape-specific configuration and the OpenTelemetry Collector configuration format into Gardener's core APIs and makes core responsible for validating it.
+gardenlet and `gardener-operator` could render additional collector pipelines from a field in the `Seed` and `Garden` APIs. This puts landscape-specific configuration and the OpenTelemetry Collector configuration format into Gardener's core APIs and makes core responsible for validating it.
 
-### Use the generic controlplane mutator
+### Configure the extension via its controller deployment
 
-The `controlplane` webhook of the extensions library is meant for extensions of kind `ControlPlane` and filters by the provider type of a shoot. Reusing it here would complicate it for a use case outside of its scope. The extension uses a dedicated webhook.
+The configuration could live in the `ControllerDeployment` of the extension, with one `ControllerDeployment` and seed selector per configuration. A `ControllerDeployment` can reference resources only to template them into the Helm values, while referenced resources of the `Seed` and `Garden` are available to the extension, and those of a `Seed` already support `WorkloadIdentity`s. Configuring the shoot control plane collectors there and the seed collector in the `Seed` would also split the configuration across two places.
+
+### Reference the configuration instead of inlining it
+
+The `providerConfig` could reference a `ConfigMap` instead of containing the configuration. The `Seed` spec is copied into the `Cluster` resource of every shoot on the seed, so an inlined configuration grows every `Cluster` resource. The configuration is expected to stay small, since operators add a few processors, exporters and pipelines. Anything larger belongs in a separate collector, and the admission component limits it to 64 KiB. Inlining keeps the configuration visible in the `Seed` and validated when the `Seed` is saved. The size of inlined configuration concerns all extensions and is better solved for all of them.
