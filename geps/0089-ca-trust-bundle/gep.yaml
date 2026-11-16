@@ -1,0 +1,9 @@
+title: Configurable CA Trust Bundle for Shoot Nodes and Workloads
+gep-number: 0089
+authors:
+- "@ccwienk"
+steering-link:
+status: provisional
+creation-date: 2026-11-16
+reviewers:
+approvers:
